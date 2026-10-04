@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NeoManager — app 模块字符串资源
+  Copyright (C) 2026 The NeoManager Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<resources>
+    <string name="app_name">Neo 管理器</string>
+    <string name="action_settings">设置</string>
+</resources>

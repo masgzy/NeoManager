@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NeoManager — 启动图标前景：白色几何 "N" 字标
+  画布 108dp，主体控制在中央 66dp 安全区内
+  Copyright (C) 2026 The NeoManager Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 几何 N：左竖笔 + 对角 + 右竖笔 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,72 L38,36 L48,36 L60,55 L60,36 L70,36 L70,72 L60,72 L48,53 L48,72 Z" />
+</vector>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NeoManager — ui 模块字符串资源（默认语言：中文）
+  Copyright (C) 2026 The NeoManager Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<resources>
+    <!-- 双窗口 -->
+    <string name="dual_pane_divider">双栏分隔条，拖动调整占比，双击复位</string>
+
+    <!-- 通用操作 -->
+    <string name="action_go_up">上级目录</string>
+    <string name="action_refresh">刷新</string>
+    <string name="action_new_folder">新建文件夹</string>
+    <string name="action_sort">排序</string>
+    <string name="action_more">更多</string>
+    <string name="action_retry">重试</string>
+
+    <!-- 列表状态 -->
+    <string name="empty_folder">空目录</string>
+    <string name="load_failed">读取失败</string>
+    <string name="items_count">%1$d 项</string>
+
+    <!-- 存储权限 -->
+    <string name="all_files_access_banner">需要「所有文件访问」权限才能浏览完整存储，当前仅能看到部分目录</string>
+    <string name="all_files_access_grant">去授权</string>
+
+    <!-- 设置页 -->
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_license">开源许可</string>
+    <string name="settings_license_value">GPL-3.0-or-later</string>
+    <string name="settings_repo">项目地址</string>
+    <string name="settings_repo_url">https://github.com/masgzy/NeoManager</string>
+    <string name="settings_privacy_title">本地化承诺</string>
+    <string name="settings_privacy_body">本应用不联网、无遥测、无广告，所有操作均在设备本地完成。</string>
+</resources>

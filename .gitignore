@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Android Studio 本地配置（不入库，SDK 路径因机器而异）
+local.properties
+
+# Kotlin / Java 构建产物
+.kotlin/
+out/
+
+# 签名文件（任何密钥严禁入库）
+*.jks
+*.keystore
+
+# 原生构建
+.externalNativeBuild/
+.cxx/
+
+# 系统文件
+.DS_Store
+captures/
+
+# 临时与日志
+*.log
+tmp/
