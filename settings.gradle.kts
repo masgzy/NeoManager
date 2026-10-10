@@ -28,6 +28,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // libsu (com.github.topjohnwu.libsu) 仅发布在 JitPack
+        maven("https://www.jitpack.io")
     }
 }
 

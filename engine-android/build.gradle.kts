@@ -27,6 +27,7 @@ kotlin {
 
 dependencies {
     implementation(project(":engine-core"))
+    implementation(libs.kotlinx.coroutines.android)
 
     // Root 执行环境（Apache-2.0）
     implementation(libs.libsu.core)

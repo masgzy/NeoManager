@@ -23,8 +23,9 @@ kotlin {
 }
 
 dependencies {
-    // sora-editor（LGPL-2.1，动态依赖方式使用，见 THIRD-PARTY-NOTICES.md）
-    implementation(libs.sora.editor)
+    // sora-editor（LGPL-2.1，动态依赖方式使用，见 THIRD-PARTY-NOTICES.md）。
+    // api 仅是编译期可见性；打包仍为 APK 内独立组件，LGPL 动态链接合规不变。
+    api(libs.sora.editor)
 
     // Compose 互操作（AndroidView 承载 View 体系编辑器）
     api(platform(libs.androidx.compose.bom))

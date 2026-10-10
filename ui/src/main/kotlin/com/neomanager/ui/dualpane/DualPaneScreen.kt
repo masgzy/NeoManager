@@ -23,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -66,6 +67,7 @@ import kotlinx.coroutines.launch
  * - 权限策略（全本地化承诺，不申请 INTERNET）不变：完整存储访问引导 + 旧版运行时权限
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 public fun DualPaneScreen(
     onOpenEditor: (String) -> Unit = {},
     modifier: Modifier = Modifier,

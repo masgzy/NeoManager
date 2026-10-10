@@ -69,6 +69,7 @@ public class FileActionsController(
         runAndReport("复制") {
             ops.copyInto(VfsUri.parse(entry.path), targetDir).getOrThrow()
             targetPane.refresh()
+            "已复制 ${entry.name} → 对面面板"
         }
     }
 
@@ -83,6 +84,7 @@ public class FileActionsController(
             ops.moveInto(VfsUri.parse(entry.path), targetDir).getOrThrow()
             sourcePane.refresh()
             targetPane.refresh()
+            "已移动 ${entry.name} → 对面面板"
         }
     }
 
@@ -95,6 +97,7 @@ public class FileActionsController(
         runAndReport("新建") {
             registry.resolve(dir).mkdir(dir).getOrThrow()
             pane.refresh()
+            "已创建文件夹 $name"
         }
     }
 
@@ -108,6 +111,7 @@ public class FileActionsController(
         runAndReport("重命名") {
             registry.resolve(uri).rename(uri, newName).getOrThrow()
             pane.refresh()
+            "已重命名 ${entry.name} → $newName"
         }
     }
 

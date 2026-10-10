@@ -6,6 +6,14 @@ package com.neomanager.editor
 
 import java.nio.charset.Charset
 
+/** 容错字符集查找：找不到时回退 ISO-8859-1（文件顶层函数，避免枚举构造期访问 companion） */
+private fun charsetOf(name: String): Charset =
+    try {
+        Charset.forName(name)
+    } catch (_: Exception) {
+        Charsets.ISO_8859_1
+    }
+
 /**
  * 文本编解码器：读取字节 → 按指定字符集解码；保存时反向编码。
  *
@@ -33,13 +41,6 @@ public enum class TextCodec(
         get() = this != GBK
 
     public companion object {
-        private fun charsetOf(name: String): Charset =
-            try {
-                Charset.forName(name)
-            } catch (_: Exception) {
-                Charsets.ISO_8859_1
-            }
-
         /** 按 BOM 嗅探；无 BOM 默认 UTF-8 */
         public fun sniff(bytes: ByteArray): TextCodec =
             when {

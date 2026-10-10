@@ -9,6 +9,7 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
 
 /**
  * Shizuku 用户服务实现：运行在 Shizuku 服务进程（shell/root UID）中，
@@ -38,7 +39,8 @@ public class NeoFileService : INeoFileService.Stub {
             out.add(
                 when {
                     child.isDirectory -> "d|$time|${child.name}"
-                    child.isSymbolicLink -> "l|$time|${readLinkTarget(child)}|${child.name}"
+                    Files.isSymbolicLink(child.toPath()) ->
+                        "l|$time|${readLinkTarget(child)}|${child.name}"
                     else -> "f|${child.length()}|$time|${child.name}"
                 },
             )

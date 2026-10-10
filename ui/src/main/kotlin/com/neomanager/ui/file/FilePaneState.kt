@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -53,27 +54,34 @@ public class FilePaneState(
         private set
 
     /** 加载失败的错误信息（null 表示无错误） */
-    public var error: String? by mutableStateOf(null)
+    public var error: String? by mutableStateOf<String?>(null)
         private set
 
+    private val sortKeyState = mutableStateOf(SortKey.NAME)
+    private val sortReverseState = mutableStateOf(false)
+    private val showHiddenState = mutableStateOf(false)
+
     /** 排序键 */
-    public var sortKey: SortKey by mutableStateOf(SortKey.NAME)
+    public var sortKey: SortKey
+        get() = sortKeyState.value
         set(value) {
-            field = value
+            sortKeyState.value = value
             reloadTick++
         }
 
     /** 逆序排序 */
-    public var sortReverse: Boolean by mutableStateOf(false)
+    public var sortReverse: Boolean
+        get() = sortReverseState.value
         set(value) {
-            field = value
+            sortReverseState.value = value
             reloadTick++
         }
 
     /** 显示隐藏文件（`.` 前缀） */
-    public var showHidden: Boolean by mutableStateOf(false)
+    public var showHidden: Boolean
+        get() = showHiddenState.value
         set(value) {
-            field = value
+            showHiddenState.value = value
             reloadTick++
         }
 

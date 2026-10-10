@@ -37,7 +37,7 @@ public fun NeoCodeEditor(
                 isLineNumberEnabled = true
                 isWordwrap = true
                 isEditable = !readOnly
-                applyNeoScheme(darkTheme)
+                applyNeoScheme(this, darkTheme)
                 onReady(this)
             }
         },

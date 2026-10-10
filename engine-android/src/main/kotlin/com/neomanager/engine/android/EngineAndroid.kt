@@ -10,9 +10,8 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import com.neomanager.engine.core.vfs.Vfs
 import com.topjohnwu.superuser.Shell
-import dev.rikka.shizuku.Shizuku
-import dev.rikka.shizuku.ShizukuUserServiceArgs
 import kotlinx.coroutines.suspendCancellableCoroutine
+import rikka.shizuku.Shizuku
 import kotlin.coroutines.resume
 
 /**
@@ -95,8 +94,9 @@ public object EngineAndroid {
                 continuation.resume(Result.failure(IllegalStateException("Shizuku 未授权或未初始化")))
                 return@suspendCancellableCoroutine
             }
-            val args =
-                ShizukuUserServiceArgs(ComponentName(context, NeoFileService::class.java))
+            val args: Shizuku.UserServiceArgs =
+                Shizuku
+                    .UserServiceArgs(ComponentName(context, NeoFileService::class.java))
                     .version(1)
                     .processNameSuffix("file")
                     .debuggable(false)
