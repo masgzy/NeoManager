@@ -48,6 +48,20 @@
         </activity>
 
         <!--
+          FileProvider：向外部应用（音视频播放器/文档查看器/APK 安装器等）安全共享本地文件。
+          仅用于「用系统应用打开」功能；不涉及任何网络能力。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
           Shizuku 服务提供器：Shizuku 经此拉起本应用的用户服务（NeoFileService）。
           未安装 Shizuku 时该 provider 不影响任何功能。
         -->

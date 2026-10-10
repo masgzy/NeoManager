@@ -26,6 +26,13 @@
     <string name="action_move_to_other_pane">移动到另一窗口</string>
     <string name="action_rename">重命名</string>
     <string name="action_delete">删除</string>
+    <string name="action_search">搜索</string>
+    <string name="search_hint">搜索当前目录及子目录…</string>
+    <string name="action_multi_select">多选</string>
+    <string name="action_select_all">全选</string>
+    <string name="action_cut">剪切</string>
+    <string name="selection_count">已选 %1$d 项</string>
+    <string name="action_open_with_system">用系统应用打开</string>
     <string name="action_compress_to_zip">压缩为 ZIP…</string>
     <string name="action_extract_here">解压到当前目录</string>
     <string name="action_edit_text">用编辑器打开</string>

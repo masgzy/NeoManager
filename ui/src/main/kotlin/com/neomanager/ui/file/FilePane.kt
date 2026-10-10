@@ -16,22 +16,31 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,8 +49,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,13 +64,14 @@ import com.neomanager.ui.R
 import com.neomanager.ui.util.Format
 
 /**
- * 单侧文件面板：路径栏 + 条目列表 + 底部工具栏。
+ * 单侧文件面板：路径栏（或搜索框）+ 条目列表 + 底部工具栏。
  *
  * 面板为无状态展示组件，状态由 [FilePaneState] 持有并经参数注入；
- * 双面板复用同一实现。
+ * 双面板复用同一实现。长按进入多选模式，多选时底部工具栏切换为批量操作。
  *
  * @param state 面板状态（调用方需在组合内调用一次 [FilePaneState.Effect]）
  * @param onEntryLongPress 长按条目回调（弹出操作菜单）
+ * @param onSelectionAction 多选操作回调（"copy"/"cut"/"delete"）
  * @param onNewFolder 新建文件夹回调（工具栏）
  * @param onSort 排序设置回调（工具栏）
  * @param onMore 更多菜单回调（工具栏）
@@ -67,39 +81,60 @@ public fun FilePane(
     state: FilePaneState,
     modifier: Modifier = Modifier,
     onEntryLongPress: (FileEntry) -> Unit = {},
+    onSelectionAction: (String) -> Unit = {},
     onNewFolder: () -> Unit = {},
     onSort: () -> Unit = {},
     onMore: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        // 路径栏：上级 + 当前路径 + 刷新
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = { state.back() }, enabled = state.canGoUp) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowUpward,
-                    contentDescription = stringResource(R.string.action_go_up),
+        // 顶部：多选模式→多选栏；搜索模式→搜索框；否则路径栏
+        when {
+            state.selectionMode ->
+                SelectionBar(
+                    state = state,
+                    onAction = onSelectionAction,
+                    onExit = state::exitSelectionMode,
                 )
-            }
-            Text(
-                text = state.path,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            IconButton(onClick = { state.refresh() }) {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = stringResource(R.string.action_refresh),
+            state.searchActive ->
+                SearchBar(
+                    state = state,
+                    onClose = state::closeSearch,
                 )
-            }
+            else ->
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { state.back() }, enabled = state.canGoUp) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
+                    }
+                    Text(
+                        text = state.path,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    IconButton(onClick = state::openSearch) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.action_search),
+                        )
+                    }
+                    IconButton(onClick = { state.refresh() }) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = stringResource(R.string.action_refresh),
+                        )
+                    }
+                }
         }
 
         HorizontalDivider()
@@ -116,18 +151,27 @@ public fun FilePane(
                     onRetry = { state.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 )
-            else ->
+            else -> {
+                val visible =
+                    if (state.searchActive && state.searchQuery.isNotBlank()) {
+                        state.searchResults
+                    } else {
+                        state.entries
+                    }
                 EntryList(
-                    entries = state.entries,
+                    entries = visible,
                     onOpen = state::open,
                     onLongPress = onEntryLongPress,
+                    isSelected = state::isSelected,
+                    selectionMode = state.selectionMode,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
         }
 
         HorizontalDivider()
 
-        // 底部工具栏：新建 / 排序 / 计数 / 更多
+        // 底部工具栏：多选模式时由 SelectionBar 占位（顶部），此处仍为常规工具栏
         Row(
             modifier =
                 Modifier
@@ -137,30 +181,136 @@ public fun FilePane(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            IconButton(onClick = onNewFolder) {
-                Icon(
-                    imageVector = Icons.Filled.CreateNewFolder,
-                    contentDescription = stringResource(R.string.action_new_folder),
+            if (!state.selectionMode) {
+                IconButton(onClick = onNewFolder) {
+                    Icon(
+                        imageVector = Icons.Filled.CreateNewFolder,
+                        contentDescription = stringResource(R.string.action_new_folder),
+                    )
+                }
+                IconButton(onClick = onSort) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                        contentDescription = stringResource(R.string.action_sort),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = stringResource(R.string.items_count, state.entries.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                IconButton(onClick = onMore) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.action_more),
+                    )
+                }
             }
-            IconButton(onClick = onSort) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                    contentDescription = stringResource(R.string.action_sort),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = stringResource(R.string.items_count, state.entries.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            IconButton(onClick = onMore) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = stringResource(R.string.action_more),
-                )
-            }
+        }
+    }
+}
+
+/** 多选模式顶栏：全选 + 已选计数 + 批量操作（复制/剪切/删除） + 退出 */
+@Composable
+private fun SelectionBar(
+    state: FilePaneState,
+    onAction: (String) -> Unit,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        IconButton(onClick = onExit) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_cancel))
+        }
+        Text(
+            text = stringResource(R.string.selection_count, state.selectedPaths.size),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        IconButton(onClick = state::selectAll, enabled = true) {
+            Icon(Icons.Filled.DoneAll, contentDescription = stringResource(R.string.action_select_all))
+        }
+        IconButton(
+            onClick = { onAction("copy") },
+            enabled = state.selectedPaths.isNotEmpty(),
+        ) {
+            Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.action_copy))
+        }
+        IconButton(
+            onClick = { onAction("cut") },
+            enabled = state.selectedPaths.isNotEmpty(),
+        ) {
+            Icon(Icons.Filled.ContentCut, contentDescription = stringResource(R.string.action_cut))
+        }
+        IconButton(
+            onClick = { onAction("delete") },
+            enabled = state.selectedPaths.isNotEmpty(),
+        ) {
+            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
+        }
+    }
+}
+
+/** 搜索模式顶栏：返回 + 关键词输入框（输入防抖后自动执行递归搜索） */
+@Composable
+private fun SearchBar(
+    state: FilePaneState,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // 输入防抖：停顿 350ms 后自动搜索
+    LaunchedEffect(state.searchQuery) {
+        kotlinx.coroutines.delay(350)
+        state.search(state.searchQuery)
+    }
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+        }
+        BasicTextField(
+            value = state.searchQuery,
+            onValueChange = { state.searchQuery = it },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+            decorationBox = { inner ->
+                Box {
+                    if (state.searchQuery.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.search_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        if (state.isSearching) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
         }
     }
 }
@@ -201,6 +351,8 @@ private fun EntryList(
     entries: List<FileEntry>,
     onOpen: (FileEntry) -> Unit,
     onLongPress: (FileEntry) -> Unit,
+    isSelected: (FileEntry) -> Boolean,
+    selectionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) {
@@ -219,19 +371,23 @@ private fun EntryList(
                 entry = entry,
                 onClick = { onOpen(entry) },
                 onLongPress = { onLongPress(entry) },
+                selected = isSelected(entry),
+                selectionMode = selectionMode,
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
     }
 }
 
-/** 列表行：类型图标 + 名称 + 摘要（目录条数 / 大小与时间）；支持长按 */
+/** 列表行：类型图标 + 名称 + 摘要（目录条数 / 大小与时间）；多选模式显示勾选框 */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     entry: FileEntry,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
+    selected: Boolean,
+    selectionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -242,17 +398,21 @@ private fun FileRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = entry.icon(),
-            contentDescription = null,
-            modifier = Modifier.size(32.dp),
-            tint =
-                if (entry.isDirectory) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-        )
+        if (selectionMode) {
+            Checkbox(checked = selected, onCheckedChange = { onClick() })
+        } else {
+            Icon(
+                imageVector = entry.icon(),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint =
+                    if (entry.isDirectory) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+            )
+        }
         Column(
             modifier =
                 Modifier
@@ -300,7 +460,7 @@ private fun FileEntry.icon(): ImageVector =
         isAudio() -> Icons.Filled.MusicNote
         isVideo() -> Icons.Filled.Movie
         isTextLike() -> Icons.Filled.Description
-        else -> Icons.Filled.InsertDriveFile
+        else -> Icons.AutoMirrored.Filled.InsertDriveFile
     }
 
 private fun FileEntry.isApkLike(): Boolean =

@@ -57,19 +57,23 @@ import com.neomanager.ui.file.EngineFileBrowser
 import com.neomanager.ui.file.FileEntry
 import com.neomanager.ui.file.FilePane
 import com.neomanager.ui.file.FilePaneState
+import com.neomanager.ui.util.OpenWith
 import kotlinx.coroutines.launch
 
 /**
  * 双窗口主屏（Phase 1 ② 引擎版）。
  *
  * - 浏览后端：[VfsRegistry]（本地 + zip/apk 内部 + Root/Shizuku 提权回退）
- * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑）
+ * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑/多选）；
+ *   多选模式顶栏提供全选/复制/剪切/删除批量操作
+ * - 打开分发：目录/压缩包进入；文本→编辑器；图片→内置查看器；音视频/APK→系统应用
  * - 权限策略（全本地化承诺，不申请 INTERNET）不变：完整存储访问引导 + 旧版运行时权限
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 public fun DualPaneScreen(
     onOpenEditor: (String) -> Unit = {},
+    onOpenImage: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -97,7 +101,7 @@ public fun DualPaneScreen(
             FileActionsController(registry = registry)
         }
 
-    // 文件打开策略：目录/压缩包 → 进入；文本 → 编辑器；其余 → 提示
+    // 文件打开策略：目录/压缩包 → 进入；文本 → 编辑器；图片 → 查看器；音视频/APK → 系统
     fun handleOpen(entry: FileEntry) {
         val name = entry.name.lowercase()
         when {
@@ -107,9 +111,28 @@ public fun DualPaneScreen(
                 name.endsWith(".jar") ||
                 name.endsWith(".apks") ||
                 name.endsWith(".xapk") ||
-                name.endsWith(".apkm") -> {
+                name.endsWith(".apkm") ||
+                name.endsWith(".tar") ||
+                name.endsWith(".gz") ||
+                name.endsWith(".xz") ||
+                name.endsWith(".zst") ||
+                name.endsWith(".bz2") ||
+                name.endsWith(".7z") ||
+                name.endsWith(".rar") -> {
                 val inner = VfsUri.zipOf(VfsUri.parseOrNull(entry.path) ?: return, "")
                 (states.firstOrNull { it.path == entry.path } ?: leftState).openPath(inner.value)
+            }
+            name.endsWith(".jpg") ||
+                name.endsWith(".jpeg") ||
+                name.endsWith(".png") ||
+                name.endsWith(".gif") ||
+                name.endsWith(".webp") ||
+                name.endsWith(".bmp") -> onOpenImage(entry.path)
+            OpenWith.mimeFor(entry.name) != "application/octet-stream" -> {
+                val result = OpenWith.openWithSystem(context, entry.path)
+                result.onFailure { e ->
+                    Toast.makeText(context, e.message ?: "无法打开", Toast.LENGTH_SHORT).show()
+                }
             }
             else -> onOpenEditor(entry.path)
         }
@@ -162,6 +185,29 @@ public fun DualPaneScreen(
 
     fun activePane(): FilePaneState = paneMenuFor ?: leftState
 
+    // 多选批量操作分发：复制/剪切 → 剪贴板；删除 → 确认框（带来源面板）
+    fun handleSelectionAction(
+        pane: FilePaneState,
+        action: String,
+    ) {
+        val picked = pane.selectedEntries()
+        if (picked.isEmpty()) return
+        when (action) {
+            "copy" -> {
+                controller.copyToClipboard(picked, pane, moveMode = false)
+                pane.exitSelectionMode()
+            }
+            "cut" -> {
+                controller.copyToClipboard(picked, pane, moveMode = true)
+                pane.exitSelectionMode()
+            }
+            "delete" -> {
+                pane.exitSelectionMode()
+                dialog = DialogKind.ConfirmDelete(picked, pane)
+            }
+        }
+    }
+
     Column(modifier = modifier) {
         if (!hasAllFilesAccess) {
             AllFilesAccessBanner(
@@ -174,6 +220,7 @@ public fun DualPaneScreen(
                 FilePane(
                     state = leftState,
                     onEntryLongPress = { actionTarget = ActionTarget(it, leftState) },
+                    onSelectionAction = { action -> handleSelectionAction(leftState, action) },
                     onNewFolder = {
                         paneMenuFor = leftState
                         dialog = DialogKind.NewFolder
@@ -186,6 +233,7 @@ public fun DualPaneScreen(
                 FilePane(
                     state = rightState,
                     onEntryLongPress = { actionTarget = ActionTarget(it, rightState) },
+                    onSelectionAction = { action -> handleSelectionAction(rightState, action) },
                     onNewFolder = {
                         paneMenuFor = rightState
                         dialog = DialogKind.NewFolder
@@ -206,11 +254,20 @@ public fun DualPaneScreen(
                 onAction = { action ->
                     actionTarget = null
                     when (action) {
+                        "multi_select" -> {
+                            target.pane.enterSelectionMode(target.entry)
+                        }
                         "edit" -> onOpenEditor(target.entry.path)
+                        "open_with" -> {
+                            val result = OpenWith.openWithSystem(context, target.entry.path)
+                            result.onFailure { e ->
+                                Toast.makeText(context, e.message ?: "无法打开", Toast.LENGTH_SHORT).show()
+                            }
+                        }
                         "copy" -> controller.copyToClipboard(listOf(target.entry), target.pane, moveMode = false)
                         "move" -> controller.copyToClipboard(listOf(target.entry), target.pane, moveMode = true)
                         "rename" -> dialog = DialogKind.Rename(target.entry)
-                        "delete" -> dialog = DialogKind.ConfirmDelete(listOf(target.entry))
+                        "delete" -> dialog = DialogKind.ConfirmDelete(listOf(target.entry), target.pane)
                         "compress" -> dialog = DialogKind.Compress(target.entry)
                         "extract" -> scope.launch { controller.extractEntry(target.entry, target.pane) }
                         "properties" -> dialog = DialogKind.Properties(target.entry)
@@ -331,7 +388,7 @@ public fun DualPaneScreen(
                     TextButton(
                         onClick = {
                             dialog = null
-                            scope.launch { controller.delete(d.entries, activePane()) }
+                            scope.launch { controller.delete(d.entries, d.pane) }
                         },
                     ) { Text(stringResource(R.string.action_delete)) }
                 },
@@ -385,6 +442,7 @@ private fun EntryActionSheet(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         listOf(
+            "multi_select" to stringResource(R.string.action_multi_select),
             "copy" to stringResource(R.string.action_copy),
             "move" to stringResource(R.string.action_move),
             "copy_to_other" to stringResource(R.string.action_copy_to_other_pane),
@@ -394,12 +452,14 @@ private fun EntryActionSheet(
             "compress" to stringResource(R.string.action_compress_to_zip),
             "extract" to stringResource(R.string.action_extract_here),
             "edit" to stringResource(R.string.action_edit_text),
+            "open_with" to stringResource(R.string.action_open_with_system),
             "properties" to stringResource(R.string.action_properties),
         ).forEach { (id, label) ->
             val enabled =
                 when (id) {
                     "extract" -> isZip
                     "copy_to_other", "move_to_other" -> !isZip
+                    "open_with" -> !isZip && OpenWith.isLocalPath(target.entry.path)
                     else -> true
                 }
             DropdownMenuItem(

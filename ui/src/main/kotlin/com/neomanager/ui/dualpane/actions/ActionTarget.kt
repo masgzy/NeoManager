@@ -28,9 +28,10 @@ public sealed class DialogKind {
         val entry: FileEntry,
     ) : DialogKind()
 
-    /** 删除确认 */
+    /** 删除确认（pane = 删除后需刷新的面板） */
     public data class ConfirmDelete(
         val entries: List<FileEntry>,
+        val pane: FilePaneState,
     ) : DialogKind()
 
     /** 压缩为 zip */

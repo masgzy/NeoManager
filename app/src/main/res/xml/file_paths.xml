@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NeoManager — FileProvider 共享路径声明
+  Copyright (C) 2026 The NeoManager Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  仅本地存储路径用于「用系统应用打开」；不涉及任何网络能力。
+-->
+<paths>
+    <external-path
+        name="external_storage"
+        path="." />
+    <files-path
+        name="internal_files"
+        path="." />
+    <cache-path
+        name="internal_cache"
+        path="." />
+</paths>

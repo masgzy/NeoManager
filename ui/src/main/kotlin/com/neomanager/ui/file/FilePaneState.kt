@@ -16,6 +16,15 @@ import com.neomanager.engine.core.vfs.VfsUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** 搜索上限：结果条数（防内存膨胀） */
+private const val SEARCH_MAX_RESULTS: Int = 500
+
+/** 搜索上限：递归深度（相对起始目录，防深层环游） */
+private const val SEARCH_MAX_DEPTH: Int = 12
+
+/** 搜索上限：扫描目录总数（防超大目录树长时间占用 IO） */
+private const val SEARCH_MAX_DIRS: Int = 2000
+
 /** 排序键（观察规格 2026-10-10-file-manager.md 第 2 节） */
 public enum class SortKey(
     public val displayName: String,
@@ -91,6 +100,165 @@ public class FilePaneState(
     /** 面板内返回栈 */
     private val backStack = ArrayDeque<String>()
 
+    // ------------------------------------------------------------------
+    // 多选批量操作
+    // ------------------------------------------------------------------
+
+    /** 多选模式是否激活 */
+    public var selectionMode: Boolean
+        get() = selectionModeState.value
+        private set(value) {
+            selectionModeState.value = value
+        }
+
+    private val selectionModeState = mutableStateOf(false)
+
+    /** 已选中条目路径集合（多选模式下；保序用于展示计数） */
+    public val selectedPaths: MutableList<String> = mutableStateListOf()
+
+    /** 条目是否处于选中态 */
+    public fun isSelected(entry: FileEntry): Boolean = entry.path in selectedPaths
+
+    /** 多选模式下点击条目：切换选中态 */
+    public fun toggleSelection(entry: FileEntry) {
+        if (entry.path in selectedPaths) {
+            selectedPaths.remove(entry.path)
+        } else {
+            selectedPaths.add(entry.path)
+        }
+    }
+
+    /** 选中当前列表全部条目 */
+    public fun selectAll() {
+        for (entry in visibleEntries) {
+            if (entry.path !in selectedPaths) selectedPaths.add(entry.path)
+        }
+    }
+
+    /** 取消全部选中并退出多选模式 */
+    public fun exitSelectionMode() {
+        selectedPaths.clear()
+        selectionMode = false
+    }
+
+    /** 当前展示条目（普通模式 = 目录列表；搜索模式 = 搜索结果） */
+    private val visibleEntries: List<FileEntry>
+        get() = if (searchActiveState.value && searchQueryState.value.isNotBlank()) searchResults else entries
+
+    /** 当前选中的条目对象（按路径回查可见列表） */
+    public fun selectedEntries(): List<FileEntry> = visibleEntries.filter { it.path in selectedPaths }
+
+    // ------------------------------------------------------------------
+    // 搜索
+    // ------------------------------------------------------------------
+
+    /** 搜索面板是否展开 */
+    public var searchActive: Boolean
+        get() = searchActiveState.value
+        private set(value) {
+            searchActiveState.value = value
+        }
+
+    private val searchActiveState = mutableStateOf(false)
+
+    /** 搜索关键词 */
+    public var searchQuery: String
+        get() = searchQueryState.value
+        set(value) {
+            searchQueryState.value = value
+        }
+
+    private val searchQueryState = mutableStateOf("")
+
+    /** 搜索结果（搜索激活且关键词非空时替代目录列表展示） */
+    public val searchResults: MutableList<FileEntry> = mutableStateListOf()
+
+    /** 是否正在搜索 */
+    public var isSearching: Boolean
+        get() = isSearchingState.value
+        private set(value) {
+            isSearchingState.value = value
+        }
+
+    private val isSearchingState = mutableStateOf(false)
+
+    /** 搜索是否被上限截断（未扫完全部子树） */
+    public var searchTruncated: Boolean
+        get() = searchTruncatedState.value
+        private set(value) {
+            searchTruncatedState.value = value
+        }
+
+    private val searchTruncatedState = mutableStateOf(false)
+
+    /**
+     * 展开搜索面板（路径栏切换为搜索输入框）。
+     * 搜索范围：当前目录（含子目录，深度 [SEARCH_MAX_DEPTH]）。
+     */
+    public fun openSearch() {
+        searchActive = true
+    }
+
+    /** 关闭搜索面板并清理结果 */
+    public fun closeSearch() {
+        searchQuery = ""
+        searchResults.clear()
+        searchTruncated = false
+        isSearching = false
+        searchActive = false
+    }
+
+    /**
+     * 执行名称包含匹配的递归搜索（后台线程）。
+     * 大小写不敏感；命中上限时置 [searchTruncated]。
+     */
+    public suspend fun search(keyword: String) {
+        val trimmed = keyword.trim()
+        searchResults.clear()
+        searchTruncated = false
+        if (trimmed.isEmpty()) return
+        isSearching = true
+        try {
+            withContext(Dispatchers.IO) {
+                val needle = trimmed.lowercase()
+                var dirsScanned = 0
+                val queue = ArrayDeque<Pair<String, Int>>()
+                queue.addLast(path to 0)
+                outer@ while (queue.isNotEmpty()) {
+                    val (dirPath, depth) = queue.removeFirst()
+                    if (dirsScanned >= SEARCH_MAX_DIRS) {
+                        searchTruncated = true
+                        break
+                    }
+                    dirsScanned++
+                    val children =
+                        runCatching { browser.list(dirPath).getOrNull() }.getOrNull() ?: continue
+                    for (child in children) {
+                        if (!showHidden && child.name.startsWith(".")) continue
+                        if (child.name.lowercase().contains(needle)) {
+                            if (searchResults.size >= SEARCH_MAX_RESULTS) {
+                                searchTruncated = true
+                                break@outer
+                            }
+                            searchResults.add(child)
+                        }
+                        if (child.isDirectory && depth < SEARCH_MAX_DEPTH) {
+                            queue.addLast(child.path to depth + 1)
+                        }
+                    }
+                }
+            }
+        } finally {
+            isSearching = false
+        }
+    }
+
+    /** 进入多选模式并选中 [entry]（操作菜单「多选」入口） */
+    public fun enterSelectionMode(entry: FileEntry) {
+        selectionMode = true
+        if (entry.path !in selectedPaths) selectedPaths.add(entry.path)
+    }
+
     /** 文件条目打开回调（编辑器/属性/压缩包进入等由调用方决定） */
     public var openFileHandler: ((FileEntry) -> Unit)? = null
 
@@ -109,8 +277,12 @@ public class FilePaneState(
         }
     }
 
-    /** 打开条目：目录进入；文件交给 [openFileHandler] */
+    /** 打开条目：多选模式下切换选中；目录进入；文件交给 [openFileHandler] */
     public fun open(entry: FileEntry) {
+        if (selectionMode) {
+            toggleSelection(entry)
+            return
+        }
         if (entry.isDirectory) {
             openPath(entry.path)
         } else {
@@ -123,10 +295,21 @@ public class FilePaneState(
         if (target == path) return
         backStack.addLast(path)
         path = target
+        resetTransientState()
     }
 
-    /** 返回：优先面板内历史栈，其次物理上级目录 */
+    /** 返回：优先面板内历史栈，其次物理上级目录；多选/搜索激活时先退出 */
     public fun back() {
+        when {
+            selectionMode -> {
+                exitSelectionMode()
+                return
+            }
+            searchActive -> {
+                closeSearch()
+                return
+            }
+        }
         val previous = backStack.removeLastOrNull()
         if (previous != null) {
             path = previous
@@ -140,6 +323,13 @@ public class FilePaneState(
         val parent = VfsUri.parseOrNull(path)?.parent()?.value ?: return
         backStack.addLast(path)
         path = parent
+        resetTransientState()
+    }
+
+    /** 导航后清理多选与搜索等临时状态（刷新不算导航） */
+    private fun resetTransientState() {
+        if (selectionMode) exitSelectionMode()
+        if (searchActive) closeSearch()
     }
 
     /** 重新加载当前目录 */

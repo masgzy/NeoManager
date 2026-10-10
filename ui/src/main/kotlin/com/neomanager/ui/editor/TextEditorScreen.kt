@@ -5,6 +5,7 @@
 package com.neomanager.ui.editor
 
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -208,7 +209,7 @@ public fun TextEditorScreen(
                 NeoCodeEditor(
                     initialText = bytes?.let { codec.decode(it) } ?: "",
                     readOnly = !writable || inArchive,
-                    darkTheme = false,
+                    darkTheme = isSystemInDarkTheme(),
                     modifier = Modifier.fillMaxSize(),
                     onReady = { editorRef = it },
                 )

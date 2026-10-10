@@ -33,6 +33,7 @@ import com.neomanager.ui.editor.TextEditorScreen
 import com.neomanager.ui.engine.EngineBridge
 import com.neomanager.ui.engine.LocalEngineBridge
 import com.neomanager.ui.settings.SettingsScreen
+import com.neomanager.ui.viewer.ImageViewerScreen
 
 /** 导航路由 */
 private object Routes {
@@ -42,6 +43,9 @@ private object Routes {
     /** 编辑器：path 为 URL 编码后的 VfsUri 字符串 */
     const val EDITOR: String = "editor?path={path}"
     const val EDITOR_ARG_PATH: String = "path"
+
+    /** 图片查看：path 为 URL 编码后的 VfsUri 字符串 */
+    const val IMAGE: String = "image?path={path}"
 }
 
 /**
@@ -62,8 +66,8 @@ public fun NeoApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    // 编辑器页面使用独立顶栏，主框架顶栏仅用于 home/settings
-    val showTopBar = currentRoute != Routes.EDITOR
+    // 编辑器/图片页使用独立顶栏，主框架顶栏仅用于 home/settings
+    val showTopBar = currentRoute != Routes.EDITOR && currentRoute != Routes.IMAGE
 
     CompositionLocalProvider(LocalEngineBridge provides engineBridge) {
         Scaffold(
@@ -109,6 +113,10 @@ public fun NeoApp(
                             val encoded = android.net.Uri.encode(path)
                             navController.navigate("editor?path=$encoded")
                         },
+                        onOpenImage = { path ->
+                            val encoded = android.net.Uri.encode(path)
+                            navController.navigate("image?path=$encoded")
+                        },
                     )
                 }
                 composable(
@@ -131,6 +139,24 @@ public fun NeoApp(
                 }
                 composable(Routes.SETTINGS) {
                     SettingsScreen(versionName = versionName)
+                }
+                composable(
+                    route = Routes.IMAGE,
+                    arguments =
+                        listOf(
+                            navArgument(Routes.EDITOR_ARG_PATH) {
+                                type = NavType.StringType
+                            },
+                        ),
+                ) { entry ->
+                    val path = entry.arguments?.getString(Routes.EDITOR_ARG_PATH).orEmpty()
+                    val bridge = LocalEngineBridge.current
+                    val registry = remember(bridge) { VfsRegistry(bridge.elevatedVfs()) }
+                    ImageViewerScreen(
+                        path = android.net.Uri.decode(path),
+                        registry = registry,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
         }
