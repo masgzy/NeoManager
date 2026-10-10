@@ -407,14 +407,12 @@ public fun DualPaneScreen(
                     dialog = null
                 }
             }
-        is DialogKind.Properties -> {
-            dialog = null
+        is DialogKind.Properties ->
             PropertiesDialog(
                 entry = d.entry,
                 registry = registry,
-                onDismiss = { },
+                onDismiss = { dialog = null },
             )
-        }
         null -> Unit
     }
 }

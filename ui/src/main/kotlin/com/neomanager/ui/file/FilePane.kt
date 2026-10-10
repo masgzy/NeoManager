@@ -86,6 +86,8 @@ public fun FilePane(
     onSort: () -> Unit = {},
     onMore: () -> Unit = {},
 ) {
+    // 组合期副作用：path/刷新计数/排序变化时重新加载目录（缺失将导致列表永不加载）
+    state.Effect()
     Column(modifier = modifier.fillMaxSize()) {
         // 顶部：多选模式→多选栏；搜索模式→搜索框；否则路径栏
         when {
