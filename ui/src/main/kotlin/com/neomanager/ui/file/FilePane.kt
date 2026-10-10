@@ -4,7 +4,8 @@
  */
 package com.neomanager.ui.file
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,17 +51,25 @@ import com.neomanager.ui.R
 import com.neomanager.ui.util.Format
 
 /**
- * 单侧文件面板：路径栏 + 条目列表 + 底部工具栏占位。
+ * 单侧文件面板：路径栏 + 条目列表 + 底部工具栏。
  *
  * 面板为无状态展示组件，状态由 [FilePaneState] 持有并经参数注入；
- * 双面板复用同一实现（引擎接入后此处不变）。
+ * 双面板复用同一实现。
  *
  * @param state 面板状态（调用方需在组合内调用一次 [FilePaneState.Effect]）
+ * @param onEntryLongPress 长按条目回调（弹出操作菜单）
+ * @param onNewFolder 新建文件夹回调（工具栏）
+ * @param onSort 排序设置回调（工具栏）
+ * @param onMore 更多菜单回调（工具栏）
  */
 @Composable
 public fun FilePane(
     state: FilePaneState,
     modifier: Modifier = Modifier,
+    onEntryLongPress: (FileEntry) -> Unit = {},
+    onNewFolder: () -> Unit = {},
+    onSort: () -> Unit = {},
+    onMore: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         // 路径栏：上级 + 当前路径 + 刷新
@@ -111,13 +120,14 @@ public fun FilePane(
                 EntryList(
                     entries = state.entries,
                     onOpen = state::open,
+                    onLongPress = onEntryLongPress,
                     modifier = Modifier.fillMaxSize(),
                 )
         }
 
         HorizontalDivider()
 
-        // 底部工具栏（占位：新建/排序/更多 在引擎接入后启用）
+        // 底部工具栏：新建 / 排序 / 计数 / 更多
         Row(
             modifier =
                 Modifier
@@ -127,13 +137,13 @@ public fun FilePane(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onNewFolder) {
                 Icon(
                     imageVector = Icons.Filled.CreateNewFolder,
                     contentDescription = stringResource(R.string.action_new_folder),
                 )
             }
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onSort) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Sort,
                     contentDescription = stringResource(R.string.action_sort),
@@ -145,7 +155,7 @@ public fun FilePane(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onMore) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = stringResource(R.string.action_more),
@@ -190,6 +200,7 @@ private fun ErrorPane(
 private fun EntryList(
     entries: List<FileEntry>,
     onOpen: (FileEntry) -> Unit,
+    onLongPress: (FileEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) {
@@ -204,24 +215,30 @@ private fun EntryList(
     }
     LazyColumn(modifier = modifier) {
         items(items = entries, key = { it.path }) { entry ->
-            FileRow(entry = entry, onClick = { onOpen(entry) })
+            FileRow(
+                entry = entry,
+                onClick = { onOpen(entry) },
+                onLongPress = { onLongPress(entry) },
+            )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
     }
 }
 
-/** 列表行：类型图标 + 名称 + 摘要（目录条数 / 大小与时间） */
+/** 列表行：类型图标 + 名称 + 摘要（目录条数 / 大小与时间）；支持长按 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     entry: FileEntry,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = onLongPress)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -7,4 +7,5 @@
 <resources>
     <string name="app_name">Neo 管理器</string>
     <string name="action_settings">设置</string>
+    <string name="editor_title">文本编辑器</string>
 </resources>

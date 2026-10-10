@@ -15,8 +15,23 @@ android {
     defaultConfig {
         minSdk = 26
     }
+
+    buildFeatures {
+        aidl = true
+    }
 }
 
 kotlin {
     jvmToolchain(21)
+}
+
+dependencies {
+    implementation(project(":engine-core"))
+
+    // Root 执行环境（Apache-2.0）
+    implementation(libs.libsu.core)
+
+    // Shizuku（Apache-2.0）
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 }

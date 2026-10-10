@@ -5,6 +5,7 @@
 
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ktlint)
 }
 
@@ -21,7 +22,16 @@ kotlin {
     jvmToolchain(21)
 }
 
+dependencies {
+    // sora-editor（LGPL-2.1，动态依赖方式使用，见 THIRD-PARTY-NOTICES.md）
+    implementation(libs.sora.editor)
+
+    // Compose 互操作（AndroidView 承载 View 体系编辑器）
+    api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+}
+
 // 依赖协议说明（蓝图 5.2 / 7.2）：
-// sora-editor（io.github.Rosemoe.sora-editor）以 LGPL-2.1 动态依赖方式引入——
-// 仅作为独立组件运行时不修改其源码，与 GPL-3.0-or-later 主项目协议兼容。
-// 接入安排在 Phase 1 第②步：AndroidView(factory = {...}) 互操作封装 + 语法高亮配置。
+// sora-editor 以 LGPL-2.1 动态依赖方式引入——仅作为独立组件运行时不修改其源码，
+// 与 GPL-3.0-or-later 主项目协议兼容。

@@ -1,29 +1,70 @@
-# 更新日志（Changelog）
+# 更新日志
 
-本项目的全部显著变更将记录在本文件。
+本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式；
+版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)（alpha 阶段允许破坏性变更）。
 
-格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本号遵循 [语义化版本（SemVer）](https://semver.org/lang/zh-CN/)。
+## [0.2.0-alpha01] - 2026-10-10 · Phase 1 ② 引擎接入
 
-## [Unreleased]
+统一 IO 引擎上线：双窗口从「演示骨架」升级为「能日用」。
 
-### 新增
+### 新增 — 引擎（engine-core，纯 Kotlin，49 项单元测试全绿）
 
-- 多模块 Gradle 工程骨架（`engine-core` / `engine-android` / `editor` / `ui` / `app`）与版本目录（Version Catalog）
-- Material Design 3 主题：Android 12+ 动态取色；Android 8–11 品牌色方案回退；深浅色双主题
-- 双窗口布局：对齐参考形态，横竖屏均为左右两列（竖屏下每列为窄幅纵向文件列表）；分隔条拖拽调节（20%–80%）与双击复位，占比旋转持久化
-- 文件面板组件：路径栏、类型图标文件列表、底部工具栏占位、错误与空态视图
-- 临时演示文件浏览数据源（`java.io` 直读，Phase 1 ② 由引擎层替换；`FileBrowser` 接口已就位）
-- 存储权限引导：Android 11+ 「所有文件访问」横幅（返回前台自动复查）与 Android 8–10 运行时权限首启请求
-- 设置页骨架：版本 / 开源许可 / 项目地址 / 本地化承诺说明
-- `engine-core`：`PathNormalizer` 纯 Kotlin 路径规范化工具与 22 项 JUnit 5 行为规格测试
-- GitHub Actions CI：push/PR 触发 `assembleDebug` + `engine-core` 单测 + `ktlint` 检查，产出 Debug APK
-- 工程配套：`.gitignore`、`.editorconfig`、ktlint、源文件 SPDX 头、THIRD-PARTY-NOTICES、本更新日志
-- 自适应启动图标（API 26+ 全覆盖，含 Android 13+ 主题图标）
+- **统一 VFS 抽象**：`VfsUri`（`file://` 与可递归嵌套的 `zip:` 方案，`!` 分隔 +
+  百分号编码）、`Vfs` 接口（列表/读取/写入/建目录/删除/重命名 + 能力位）、
+  `LocalVfs`（NIO 实现，含符号链接识别）
+- **ZIP 家族内部浏览**：`ZipVfs` 随机访问浏览 zip/jar/apk 内部（支持 zip 套 zip 递归、
+  GBK 回退解码中文条目名）；改动回写采用「原条目保持压缩方式与时间戳」的整包重建
+  （STORED 条目预置 CRC/大小，为 APK 的 resources.arsc/so 保持未压缩存储）
+- **归档引擎** `ArchiveEngine`：魔数探测（zip/gz/xz/zst/bz2/7z/rar/ustar-tar）；
+  列表与解压支持 zip/tar/tar.gz/tar.xz/tar.zst/tar.bz2/7z（只读）/rar4（只读）；
+  打包支持 zip/tar 系与 gz/xz/zst/bz2 单文件压缩；zip-slip 路径穿越防护
+- **跨后端文件操作** `FileOps`：本地 ↔ zip 之间流式复制/移动（同卷 rename 快路径）
+- **提权回退** `VfsRegistry.CompositeVfs`：本地不可读时自动切换 Root/Shizuku 后端
 
-### 技术决策
+### 新增 — 平台（engine-android）
 
-- 锁定 2026-10 最新稳定栈：AGP 9.4.1（内置 Kotlin 支持，模块不再单独 apply kotlin-android）+ Kotlin 2.4.20 + Compose BOM 2026.09.00 + Gradle 9.8
-- minSdk 26 / targetSdk+compileSdk 37
-- 应用 ID：`io.github.masgzy.neomanager`
-- 全本地化承诺落地：清单永不声明 `android.permission.INTERNET`，不嵌入任何遥测 SDK
+- **Root 后端**（libsu，Apache-2.0）：`ls -Apl` 解析列表、`/data/local/tmp` 中转站读写
+  （避免 shell 文本流损坏二进制）、root 删除/建目录/重命名
+- **Shizuku 后端**（Apache-2.0）：用户服务 `NeoFileService`（AIDL，ParcelFileDescriptor
+  传输二进制）、授权流程、服务绑定；Shizuku 优先、Root 兜底的自动选择
+- 设置页新增「引擎」分区：Root/Shizuku 状态探测、授权请求、服务绑定
+
+### 新增 — 界面（ui / editor / app）
+
+- **文件操作**：长按条目底部操作菜单（复制/移动/跨窗复制移动/重命名/删除/压缩为
+  ZIP/解压/属性/编辑器打开）、剪贴板粘贴、新建文件夹、删除二次确认
+- **排序与过滤**：名称/大小/修改时间/扩展名 + 逆序 + 显示隐藏文件（目录恒优先）
+- **属性对话框**：类型/大小/时间/路径 + **校验和**（MD5/SHA-1/SHA-256/CRC32，后台计算）
+- **压缩包浏览**：点击 zip/apk/jar 直接进入内部浏览（返回栈无缝上溯到容器目录）
+- **文本编辑器**（sora-editor 0.23.4，LGPL-2.1 动态依赖）：行号/自动换行、多字符集
+  （UTF-8/UTF-16LE/UTF-16BE/GBK/ISO-8859-1，BOM 嗅探）、大文件提示（>2MB）、
+  压缩包内只读预览
+- 编辑器独立路由与顶栏；Material You 动态取色延续
+
+### 变更
+
+- `FilePaneState` 升级为 VfsUri 导航（zip 根上溯即容器目录）、排序/隐藏开关并入加载管线
+- 底部工具栏三枚占位按钮全部启用（新建/排序/更多菜单）
+
+### 依赖
+
+- 新增：commons-compress 1.28.0（Apache-2.0）、zstd-jni（BSD-2）、xz 1.10（Public
+  Domain）、junrar 7.5.9（unRar 许可）、libsu 6.0.0（Apache-2.0）、Shizuku api/provider
+  13.1.5（Apache-2.0）、sora-editor 0.23.4（LGPL-2.1，动态依赖）
+- 全部符合协议红线：未引入 GPL-3.0 之外的强传染协议依赖；THIRD-PARTY-NOTICES.md 已同步
+
+### 已知限制
+
+- zip 内编辑为整包重建（未保留 ZIP64 扩展与 extra fields）；APK 深度编辑（对齐/签名）
+  属 Phase 2 重打包管线
+- 7z 写入需 p7zip JNI（暂缓）；rar 仅支持 RAR4 格式读取
+- 文件操作进度回调未接入（大目录复制/移动暂无进度条）
+- 编辑器语法高亮 grammar、查找替换 UI 在后续版本补齐
+
+## [0.1.0-alpha02] - 2026-10-09 · Phase 1 ① UI 骨架
+
+- 多模块工程骨架（engine-core / engine-android / editor / ui / app）+ 版本目录 + CI
+- 单 Activity + Compose Navigation + MD3 主题（Android 12+ 动态取色、8-11 品牌色回退）
+- 双窗口布局：恒定左右两列 + 可拖拽分隔条（20%–80%、双击复位、跨旋转持久化）
+- 双窗口文件浏览（java.io 临时数据源）
+- 净室规范文档、第三方声明、GPL-3.0-or-later 许可

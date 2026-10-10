@@ -18,15 +18,17 @@ Kotlin · Jetpack Compose · Material You · GPL-3.0-or-later
 
 ## 项目状态
 
-**当前进度：Phase 1 第①步（UI 骨架）已完成** ✅ —— 双窗口界面可安装真机演示，引擎接入（Phase 1 第②步）进行中。
+**当前进度：Phase 1 ②（引擎接入）已完成** ✅ —— 统一 IO 引擎 + zip 内部浏览 +
+压缩解压 + 文本编辑器 + Root/Shizuku 提权回退，全链路单测覆盖（engine-core 49 项全绿）。
 
 | 模块 | 状态 |
 |---|---|
 | 多模块工程骨架 + 版本目录 + CI | ✅ 已完成 |
 | MD3 主题（动态取色 + 品牌色回退） | ✅ 已完成 |
 | 双窗口布局（永远左右两列 + 可拖拽分隔条） | ✅ 已完成 |
-| 双窗口文件浏览（临时数据源） | ✅ 可演示 |
-| 引擎接入（root/Shizuku、压缩包、编辑器） | 🚧 Phase 1 ② |
+| 引擎接入（VFS 统一抽象 + zip 内部浏览 + 压缩解压 + root/Shizuku） | ✅ Phase 1 ② |
+| 文件操作（复制/移动/重命名/删除/压缩/解压/校验和） | ✅ Phase 1 ② |
+| 文本编辑器（sora-editor + 多字符集 + 大文件保护） | ✅ Phase 1 ② |
 | APK 工具箱（信息/签名/安装/克隆） | ⏳ Phase 2 |
 | Dex++（smali 编辑回写） | ⏳ Phase 3 |
 | ARSC 结构化编辑器 / Arsc 对比 / Dex 对比 | ⏳ Phase 4 |

@@ -15,6 +15,19 @@ coroutines = "1.11.0"
 junitJupiter = "5.14.4"
 junitPlatform = "1.14.4"
 
+# Phase 1 ② 引擎接入：压缩引擎（全部非传染协议，见 THIRD-PARTY-NOTICES.md）
+commonsCompress = "1.28.0"
+zstdJni = "1.5.7-3"
+xzJava = "1.10"
+junrar = "7.5.9"
+
+# Phase 1 ② 引擎接入：平台执行环境（均为 Apache-2.0）
+libsu = "6.0.0"
+shizuku = "13.1.5"
+
+# Phase 1 ② 引擎接入：代码编辑器（LGPL-2.1，动态依赖）
+soraEditor = "0.23.4"
+
 [libraries]
 # AndroidX 基础
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +46,24 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 
 # Kotlin 协程（ui 模块后台列表扫描）
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# 压缩引擎（engine-core，纯 JVM）
+# commons-compress: zip/tar/gzip/xz/zstd/7z 读写框架（Apache-2.0）
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+# zstd-jni: zstd 编解码本地实现（BSD-2-Clause，commons-compress 声明式依赖）
+zstd-jni = { group = "com.github.luben", name = "zstd-jni", version.ref = "zstdJni" }
+# xz: xz 编解码（Public Domain，commons-compress 声明式依赖）
+xz-java = { group = "org.tukaani", name = "xz", version.ref = "xzJava" }
+# junrar: rar4 只读解包（unRar 自由软件许可，蓝图第三节明确采用）
+junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" }
+
+# 平台执行环境（engine-android，Apache-2.0）
+libsu-core = { group = "com.github.topjohnwu.libsu", name = "core", version.ref = "libsu" }
+shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
+shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
+
+# 代码编辑器（editor 模块，LGPL-2.1 动态依赖）
+sora-editor = { group = "io.github.Rosemoe.sora-editor", name = "editor", version.ref = "soraEditor" }
 
 # 测试（engine-core，纯 JVM）
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }

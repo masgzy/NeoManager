@@ -15,6 +15,54 @@
     <string name="action_sort">排序</string>
     <string name="action_more">更多</string>
     <string name="action_retry">重试</string>
+    <string name="action_ok">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_done">完成</string>
+    <string name="action_back">返回</string>
+    <string name="action_paste">粘贴（%1$d 项）</string>
+    <string name="action_copy">复制</string>
+    <string name="action_move">移动</string>
+    <string name="action_copy_to_other_pane">复制到另一窗口</string>
+    <string name="action_move_to_other_pane">移动到另一窗口</string>
+    <string name="action_rename">重命名</string>
+    <string name="action_delete">删除</string>
+    <string name="action_compress_to_zip">压缩为 ZIP…</string>
+    <string name="action_extract_here">解压到当前目录</string>
+    <string name="action_edit_text">用编辑器打开</string>
+    <string name="action_properties">属性</string>
+    <string name="sort_reverse">逆序排序</string>
+    <string name="show_hidden_files">显示隐藏文件</string>
+    <string name="confirm_delete">确认删除选中的 %1$d 项？（不可恢复）</string>
+
+    <!-- 属性 -->
+    <string name="prop_type">类型</string>
+    <string name="prop_size">大小</string>
+    <string name="prop_modified">修改时间</string>
+    <string name="prop_path">路径</string>
+    <string name="prop_checksum">校验和</string>
+    <string name="prop_computing">正在计算…</string>
+    <string name="prop_checksum_failed">校验和计算失败</string>
+
+    <!-- 编辑器 -->
+    <string name="editor_save">保存</string>
+    <string name="editor_saved">已保存</string>
+    <string name="editor_save_failed">保存失败：%1$s</string>
+    <string name="editor_large_file">大文件提示：加载耗时与内存占用会显著增加，建议关闭高亮或分段编辑</string>
+    <string name="editor_readonly_archive">压缩包内文件为只读预览；如需编辑请先解压</string>
+
+    <!-- 引擎状态 -->
+    <string name="settings_engine_title">引擎</string>
+    <string name="settings_engine_root">Root（libsu）</string>
+    <string name="settings_engine_shizuku">Shizuku</string>
+    <string name="engine_status_ready">可用</string>
+    <string name="engine_status_unavailable">不可用</string>
+    <string name="engine_status_running">运行中 · 未授权</string>
+    <string name="engine_status_granted">已授权</string>
+    <string name="engine_status_bound">服务已绑定</string>
+    <string name="engine_action_request">请求授权</string>
+    <string name="engine_action_bind">绑定服务</string>
+    <string name="engine_bind_ok">Shizuku 文件引擎已就绪</string>
+    <string name="engine_bind_failed">绑定失败：%1$s</string>
 
     <!-- 列表状态 -->
     <string name="empty_folder">空目录</string>

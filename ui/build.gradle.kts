@@ -37,5 +37,9 @@ dependencies {
     api(libs.androidx.lifecycle.runtime.compose)
     api(libs.kotlinx.coroutines.android)
 
+    // 引擎接入（Phase 1 ②）：浏览后端 + 文件操作 + 编辑器页面
+    api(project(":engine-core"))
+    api(project(":editor"))
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
