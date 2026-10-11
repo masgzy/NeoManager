@@ -4,14 +4,15 @@
  */
 package com.neomanager.app
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -49,11 +50,11 @@ private object Routes {
 }
 
 /**
- * 应用骨架：顶栏 + Navigation 导航。
+ * 应用骨架：Navigation 导航 + 各页面自持顶栏。
  *
- * - home：双窗口文件浏览（[DualPaneScreen]）
- * - editor：文本编辑（[TextEditorScreen]，VfsUri 经 URL 编码传参）
- * - settings：设置与关于（[SettingsScreen]）
+ * - home：双窗口文件浏览（[DualPaneScreen]），MT 风格全屏自绘顶/底栏，无框架顶栏；
+ * - editor：文本编辑（[TextEditorScreen]，VfsUri 经 URL 编码传参）；
+ * - settings：设置与关于（[SettingsScreen]）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,41 +67,44 @@ public fun NeoApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    // 编辑器/图片页使用独立顶栏，主框架顶栏仅用于 home/settings
-    val showTopBar = currentRoute != Routes.EDITOR && currentRoute != Routes.IMAGE
-
     CompositionLocalProvider(LocalEngineBridge provides engineBridge) {
         Scaffold(
             modifier = modifier,
             topBar = {
-                if (showTopBar) {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.app_name)) },
-                        actions = {
-                            if (currentRoute != Routes.SETTINGS) {
-                                IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
+                when (currentRoute) {
+                    Routes.EDITOR, Routes.IMAGE ->
+                        TopAppBar(
+                            title = { Text(stringResource(R.string.editor_title)) },
+                            navigationIcon = {
+                                IconButton(onClick = { navController.popBackStack() }) {
                                     Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = stringResource(R.string.action_settings),
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = stringResource(R.string.action_back),
                                     )
                                 }
-                            }
-                        },
-                    )
-                } else {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.editor_title)) },
-                        navigationIcon = {
-                            IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.action_back),
-                                )
-                            }
-                        },
-                    )
+                            },
+                        )
+                    Routes.SETTINGS ->
+                        TopAppBar(
+                            title = { Text(stringResource(R.string.app_name)) },
+                            navigationIcon = {
+                                IconButton(onClick = { navController.popBackStack() }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = stringResource(R.string.action_back),
+                                    )
+                                }
+                            },
+                        )
+                    else -> Unit // home：MT 风格由 DualPaneScreen 自绘全屏 Chrome
                 }
             },
+            contentWindowInsets =
+                if (currentRoute == Routes.HOME) {
+                    WindowInsets(0, 0, 0, 0) // home 全屏绘制，状态栏/导航栏区域由 MT Chrome 着色
+                } else {
+                    ScaffoldDefaults.contentWindowInsets
+                },
         ) { innerPadding ->
             NavHost(
                 navController = navController,
@@ -117,6 +121,7 @@ public fun NeoApp(
                             val encoded = android.net.Uri.encode(path)
                             navController.navigate("image?path=$encoded")
                         },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     )
                 }
                 composable(

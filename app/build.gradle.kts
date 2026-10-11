@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.masgzy.neomanager"
         minSdk = 26
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.2.0-alpha04"
+        versionCode = 7
+        versionName = "0.2.0-alpha05"
         // 全本地化承诺：不嵌入任何遥测/统计 SDK
     }
 

@@ -14,14 +14,16 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -33,12 +35,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -61,11 +65,13 @@ import com.neomanager.ui.util.OpenWith
 import kotlinx.coroutines.launch
 
 /**
- * 双窗口主屏（Phase 1 ② 引擎版）。
+ * 双窗口主屏（MT 风格外壳，0.2.0-alpha05）。
+ *
+ * 布局自上而下：共享炭黑顶栏（路径/统计/搜索/多选）→ 左右双窗格 → 共享白底工具栏
+ * （后退/前进/添加/同步/上级）。顶底栏始终作用于「活动窗口」：点击任一窗格即激活。
  *
  * - 浏览后端：[VfsRegistry]（本地 + zip/apk 内部 + Root/Shizuku 提权回退）
- * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑/多选）；
- *   多选模式顶栏提供全选/复制/剪切/删除批量操作
+ * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑/多选）
  * - 打开分发：目录/压缩包进入；文本→编辑器；图片→内置查看器；音视频/APK→系统应用
  * - 权限策略（全本地化承诺，不申请 INTERNET）不变：完整存储访问引导 + 旧版运行时权限
  */
@@ -74,6 +80,7 @@ import kotlinx.coroutines.launch
 public fun DualPaneScreen(
     onOpenEditor: (String) -> Unit = {},
     onOpenImage: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -94,6 +101,10 @@ public fun DualPaneScreen(
     val leftState = remember { FilePaneState(startUri, browser) }
     val rightState = remember { FilePaneState(startUri, browser) }
     val states = remember { listOf(leftState, rightState) }
+
+    // 活动窗口：共享顶栏/底栏的操作目标
+    var activeIndex by remember { mutableIntStateOf(0) }
+    val activeState = states[activeIndex]
 
     // 文件操作控制器（剪贴板 + 对话框状态）
     val controller =
@@ -181,9 +192,6 @@ public fun DualPaneScreen(
     var actionTarget by remember { mutableStateOf<ActionTarget?>(null) }
     var dialog by remember { mutableStateOf<DialogKind?>(null) }
     var sortDialog by remember { mutableStateOf<SortDialogState?>(null) }
-    var paneMenuFor by remember { mutableStateOf<FilePaneState?>(null) }
-
-    fun activePane(): FilePaneState = paneMenuFor ?: leftState
 
     // 多选批量操作分发：复制/剪切 → 剪贴板；删除 → 确认框（带来源面板）
     fun handleSelectionAction(
@@ -215,33 +223,43 @@ public fun DualPaneScreen(
                 onResolved = { hasAllFilesAccess = checkAllFilesAccess() },
             )
         }
-        DualPaneLayout(
-            first = {
-                FilePane(
-                    state = leftState,
-                    onEntryLongPress = { actionTarget = ActionTarget(it, leftState) },
-                    onSelectionAction = { action -> handleSelectionAction(leftState, action) },
-                    onNewFolder = {
-                        paneMenuFor = leftState
-                        dialog = DialogKind.NewFolder
-                    },
-                    onSort = { sortDialog = SortDialogState(leftState) },
-                    onMore = { paneMenuFor = leftState },
-                )
+        MtTopBar(
+            state = activeState,
+            pasteEnabled = controller.clipboardCount() > 0,
+            onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
+            onSort = { sortDialog = SortDialogState(activeState) },
+            onSwapWindows = {
+                val left = leftState.path
+                leftState.setPathInstant(rightState.path)
+                rightState.setPathInstant(left)
             },
-            second = {
-                FilePane(
-                    state = rightState,
-                    onEntryLongPress = { actionTarget = ActionTarget(it, rightState) },
-                    onSelectionAction = { action -> handleSelectionAction(rightState, action) },
-                    onNewFolder = {
-                        paneMenuFor = rightState
-                        dialog = DialogKind.NewFolder
-                    },
-                    onSort = { sortDialog = SortDialogState(rightState) },
-                    onMore = { paneMenuFor = rightState },
-                )
-            },
+            onOpenSettings = onOpenSettings,
+            onSelectionAction = { action -> handleSelectionAction(activeState, action) },
+        )
+        Box(Modifier.weight(1f)) {
+            DualPaneLayout(
+                first = {
+                    PaneHost(
+                        state = leftState,
+                        onActivate = { activeIndex = 0 },
+                        onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
+                    )
+                },
+                second = {
+                    PaneHost(
+                        state = rightState,
+                        onActivate = { activeIndex = 1 },
+                        onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
+                    )
+                },
+            )
+        }
+        MtBottomBar(
+            state = activeState,
+            pasteEnabled = controller.clipboardCount() > 0,
+            onNewFolder = { dialog = DialogKind.NewFolder },
+            onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
+            onSync = { otherPaneOf(activeState, states).setPathInstant(activeState.path) },
         )
     }
 
@@ -327,34 +345,6 @@ public fun DualPaneScreen(
         )
     }
 
-    // 面板更多菜单（粘贴/隐藏开关/编辑器）
-    paneMenuFor?.let { pane ->
-        DropdownMenu(expanded = true, onDismissRequest = { paneMenuFor = null }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_paste, controller.clipboardCount())) },
-                onClick = {
-                    paneMenuFor = null
-                    scope.launch { controller.pasteClipboard(pane) }
-                },
-                enabled = controller.clipboardCount() > 0,
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_back)) },
-                onClick = {
-                    paneMenuFor = null
-                    pane.back()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.show_hidden_files)) },
-                onClick = {
-                    paneMenuFor = null
-                    pane.showHidden = !pane.showHidden
-                },
-            )
-        }
-    }
-
     // 各类输入/确认对话框
     when (val d = dialog) {
         is DialogKind.NewFolder ->
@@ -364,7 +354,7 @@ public fun DualPaneScreen(
                 onDismiss = { dialog = null },
             ) { name ->
                 scope.launch {
-                    controller.createFolder(activePane(), name)
+                    controller.createFolder(activeState, name)
                     dialog = null
                 }
             }
@@ -375,7 +365,7 @@ public fun DualPaneScreen(
                 onDismiss = { dialog = null },
             ) { newName ->
                 scope.launch {
-                    controller.rename(d.entry, newName, activePane())
+                    controller.rename(d.entry, newName, activeState)
                     dialog = null
                 }
             }
@@ -403,7 +393,7 @@ public fun DualPaneScreen(
                 onDismiss = { dialog = null },
             ) { archiveName ->
                 scope.launch {
-                    controller.compressToZip(d.entry, archiveName, activePane())
+                    controller.compressToZip(d.entry, archiveName, activeState)
                     dialog = null
                 }
             }
@@ -414,6 +404,32 @@ public fun DualPaneScreen(
                 onDismiss = { dialog = null },
             )
         null -> Unit
+    }
+}
+
+/** 单个窗格宿主：空白区点击 / 条目交互均将本窗格设为活动窗口 */
+@Composable
+private fun PaneHost(
+    state: FilePaneState,
+    onActivate: () -> Unit,
+    onEntryLongPress: (FileEntry) -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onActivate() })
+                },
+    ) {
+        FilePane(
+            state = state,
+            onEntryLongPress = { entry ->
+                onActivate()
+                onEntryLongPress(entry)
+            },
+            onInteract = onActivate,
+        )
     }
 }
 
@@ -535,7 +551,7 @@ private fun AllFilesAccessBanner(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -544,7 +560,7 @@ private fun AllFilesAccessBanner(
             text = stringResource(R.string.all_files_access_banner),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Button(
             onClick = {

@@ -4,104 +4,66 @@
  */
 package com.neomanager.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
 /**
- * Neo 主题（Material Design 3）。
+ * Neo 主题（MT 风格固定取色，0.2.0-alpha05 起）。
  *
- * 取色策略（蓝图 5 决策）：
- * - Android 12+（API 31）：Material You 动态取色，跟随系统壁纸；
- * - Android 8-11（API 26-30）与 dynamicColor = false 时：使用 [BrandColorSchemes] 品牌色回退。
- * 两条分支均为必做路径，缺一不可（验收项）。
+ * 取色策略：
+ * - 不再使用 Material You 动态取色（壁纸取色会让界面偏离 MT 参考观感）；
+ * - 浅色：白底黑字 + 炭黑顶栏 + 蓝色强调；深色：纯黑列表 + 亮字，同构映射。
+ * 文件夹/文件图标的专属色（[MtFolderLight]/[MtFolderDark] 等）由列表组件直接引用。
  */
-private object BrandColorSchemes {
+private object MtColorSchemes {
     val Light =
         lightColorScheme(
-            primary = BrandPrimaryLight,
-            onPrimary = BrandOnPrimaryLight,
-            primaryContainer = BrandPrimaryContainerLight,
-            onPrimaryContainer = BrandOnPrimaryContainerLight,
-            secondary = BrandSecondaryLight,
-            onSecondary = BrandOnSecondaryLight,
-            secondaryContainer = BrandSecondaryContainerLight,
-            onSecondaryContainer = BrandOnSecondaryContainerLight,
-            tertiary = BrandTertiaryLight,
-            onTertiary = BrandOnTertiaryLight,
-            tertiaryContainer = BrandTertiaryContainerLight,
-            onTertiaryContainer = BrandOnTertiaryContainerLight,
-            error = BrandErrorLight,
-            onError = BrandOnErrorLight,
-            errorContainer = BrandErrorContainerLight,
-            onErrorContainer = BrandOnErrorContainerLight,
-            background = BrandBackgroundLight,
-            onBackground = BrandOnBackgroundLight,
-            surface = BrandSurfaceLight,
-            onSurface = BrandOnSurfaceLight,
-            surfaceVariant = BrandSurfaceVariantLight,
-            onSurfaceVariant = BrandOnSurfaceVariantLight,
-            outline = BrandOutlineLight,
+            primary = MtPrimaryLight,
+            onPrimary = Color(0xFFFFFFFF),
+            secondary = MtPrimaryLight,
+            background = MtSurfaceLight,
+            onBackground = MtOnSurfaceLight,
+            surface = MtSurfaceLight,
+            onSurface = MtOnSurfaceLight,
+            surfaceVariant = MtSurfaceVariantLight,
+            onSurfaceVariant = MtOnSurfaceVariantLight,
+            outline = MtOnSurfaceVariantLight,
+            outlineVariant = MtOutlineVariantLight,
+            error = Color(0xFFBA1A1A),
+            onError = Color(0xFFFFFFFF),
         )
 
     val Dark =
         darkColorScheme(
-            primary = BrandPrimaryDark,
-            onPrimary = BrandOnPrimaryDark,
-            primaryContainer = BrandPrimaryContainerDark,
-            onPrimaryContainer = BrandOnPrimaryContainerDark,
-            secondary = BrandSecondaryDark,
-            onSecondary = BrandOnSecondaryDark,
-            secondaryContainer = BrandSecondaryContainerDark,
-            onSecondaryContainer = BrandOnSecondaryContainerDark,
-            tertiary = BrandTertiaryDark,
-            onTertiary = BrandOnTertiaryDark,
-            tertiaryContainer = BrandTertiaryContainerDark,
-            onTertiaryContainer = BrandOnTertiaryContainerDark,
-            error = BrandErrorDark,
-            onError = BrandOnErrorDark,
-            errorContainer = BrandErrorContainerDark,
-            onErrorContainer = BrandOnErrorContainerDark,
-            background = BrandBackgroundDark,
-            onBackground = BrandOnBackgroundDark,
-            surface = BrandSurfaceDark,
-            onSurface = BrandOnSurfaceDark,
-            surfaceVariant = BrandSurfaceVariantDark,
-            onSurfaceVariant = BrandOnSurfaceVariantDark,
-            outline = BrandOutlineDark,
+            primary = MtPrimaryDark,
+            onPrimary = Color(0xFF0B2A44),
+            secondary = MtPrimaryDark,
+            background = MtSurfaceDark,
+            onBackground = MtOnSurfaceDark,
+            surface = MtSurfaceDark,
+            onSurface = MtOnSurfaceDark,
+            surfaceVariant = MtSurfaceVariantDark,
+            onSurfaceVariant = MtOnSurfaceVariantDark,
+            outline = MtOnSurfaceVariantDark,
+            outlineVariant = MtOutlineVariantDark,
+            error = Color(0xFFFFB4AB),
+            onError = Color(0xFF690005),
         )
 }
 
-/**
- * 应用根主题。
- *
- * @param darkTheme 是否深色模式，默认跟随系统
- * @param dynamicColor 是否启用 Android 12+ 动态取色，默认开启
- */
+/** 是否深色模式（跟随系统；MT 风格两套色板见 [MtColorSchemes]） */
 @Composable
 public fun NeoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val colorScheme =
-        when {
-            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            darkTheme -> BrandColorSchemes.Dark
-            else -> BrandColorSchemes.Light
-        }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) MtColorSchemes.Dark else MtColorSchemes.Light,
         typography = Typography(),
         content = content,
     )

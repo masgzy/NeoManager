@@ -100,6 +100,13 @@ public class FilePaneState(
     /** 面板内返回栈 */
     private val backStack = ArrayDeque<String>()
 
+    /** 面板内前进栈（返回后可再前进；新导航会清空） */
+    private val forwardStack = ArrayDeque<String>()
+
+    /** 是否可以前进 */
+    public val canGoForward: Boolean
+        get() = forwardStack.isNotEmpty()
+
     // ------------------------------------------------------------------
     // 多选批量操作
     // ------------------------------------------------------------------
@@ -259,6 +266,12 @@ public class FilePaneState(
         if (entry.path !in selectedPaths) selectedPaths.add(entry.path)
     }
 
+    /** 进入多选模式并全选当前列表（顶栏「全选」入口） */
+    public fun enterSelectAllMode() {
+        selectionMode = true
+        selectAll()
+    }
+
     /** 文件条目打开回调（编辑器/属性/压缩包进入等由调用方决定） */
     public var openFileHandler: ((FileEntry) -> Unit)? = null
 
@@ -290,10 +303,11 @@ public class FilePaneState(
         }
     }
 
-    /** 导航到指定路径，当前路径压入历史栈 */
+    /** 导航到指定路径，当前路径压入历史栈；开启新分支（清空前进栈） */
     public fun openPath(target: String) {
         if (target == path) return
         backStack.addLast(path)
+        forwardStack.clear()
         path = target
         resetTransientState()
     }
@@ -312,17 +326,35 @@ public class FilePaneState(
         }
         val previous = backStack.removeLastOrNull()
         if (previous != null) {
+            forwardStack.addLast(path)
             path = previous
+            resetTransientState()
         } else {
             up()
         }
+    }
+
+    /** 前进：回到最近一次返回前的路径 */
+    public fun forward() {
+        val next = forwardStack.removeLastOrNull() ?: return
+        backStack.addLast(path)
+        path = next
+        resetTransientState()
     }
 
     /** 上级目录；已在根时忽略 */
     public fun up() {
         val parent = VfsUri.parseOrNull(path)?.parent()?.value ?: return
         backStack.addLast(path)
+        forwardStack.addLast(path)
         path = parent
+        resetTransientState()
+    }
+
+    /** 瞬时切换路径（不动历史栈）：窗口交换/同步专用 */
+    public fun setPathInstant(target: String) {
+        if (target == path) return
+        path = target
         resetTransientState()
     }
 

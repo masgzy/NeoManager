@@ -12,14 +12,16 @@
     <string name="action_go_up">上级目录</string>
     <string name="action_refresh">刷新</string>
     <string name="action_new_folder">新建文件夹</string>
-    <string name="action_sort">排序</string>
+    <string name="action_sort">排序方式</string>
     <string name="action_more">更多</string>
+    <string name="action_settings">设置</string>
     <string name="action_retry">重试</string>
     <string name="action_ok">确定</string>
     <string name="action_cancel">取消</string>
     <string name="action_done">完成</string>
     <string name="action_back">返回</string>
-    <string name="action_paste">粘贴（%1$d 项）</string>
+    <string name="action_forward">前进</string>
+    <string name="action_paste_plain">粘贴</string>
     <string name="action_copy">复制</string>
     <string name="action_move">移动</string>
     <string name="action_copy_to_other_pane">复制到另一窗口</string>
@@ -40,6 +42,14 @@
     <string name="sort_reverse">逆序排序</string>
     <string name="show_hidden_files">显示隐藏文件</string>
     <string name="confirm_delete">确认删除选中的 %1$d 项？（不可恢复）</string>
+
+    <!-- MT 风格共享顶栏/底栏 -->
+    <string name="action_sync_windows">同步对侧窗口</string>
+    <string name="action_swap_windows">交换窗口</string>
+    <string name="stats_folders_files_storage">文件夹: %1$d  文件: %2$d  储存: %3$s</string>
+    <string name="stats_folders_files">文件夹: %1$d  文件: %2$d</string>
+    <string name="stats_search_results">搜索结果: %1$d 项</string>
+    <string name="search_no_result">未找到匹配项</string>
 
     <!-- 属性 -->
     <string name="prop_type">类型</string>

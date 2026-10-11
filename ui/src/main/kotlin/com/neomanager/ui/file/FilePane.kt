@@ -4,7 +4,9 @@
  */
 package com.neomanager.ui.file
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,132 +18,75 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.neomanager.ui.R
+import com.neomanager.ui.theme.MtFolderDark
+import com.neomanager.ui.theme.MtFolderLight
+import com.neomanager.ui.theme.MtFolderSheet
+import com.neomanager.ui.theme.MtIconApk
+import com.neomanager.ui.theme.MtIconArchive
+import com.neomanager.ui.theme.MtIconAudio
+import com.neomanager.ui.theme.MtIconGeneric
+import com.neomanager.ui.theme.MtIconImage
+import com.neomanager.ui.theme.MtIconText
+import com.neomanager.ui.theme.MtIconVideo
+import com.neomanager.ui.theme.MtRowSelectedDark
+import com.neomanager.ui.theme.MtRowSelectedLight
+import com.neomanager.ui.theme.MtSurfaceDark
 import com.neomanager.ui.util.Format
 
+/** 虚拟「..」行的稳定 key（避免与真实条目路径冲突） */
+private const val PARENT_ROW_KEY: String = "__parent_row__"
+
 /**
- * 单侧文件面板：路径栏（或搜索框）+ 条目列表 + 底部工具栏。
+ * 单侧文件面板（MT 风格瘦身版）。
  *
- * 面板为无状态展示组件，状态由 [FilePaneState] 持有并经参数注入；
- * 双面板复用同一实现。长按进入多选模式，多选时底部工具栏切换为批量操作。
+ * 顶栏（路径/统计/搜索/多选操作）与底栏（后退/前进/添加/同步/上级）由双窗口外壳统一持有，
+ * 面板仅负责内容区：加载 / 错误 / 条目列表。点击或长按条目会触发 [onInteract]
+ * （外壳据此把该面板标记为活动窗口）。
  *
  * @param state 面板状态（调用方需在组合内调用一次 [FilePaneState.Effect]）
  * @param onEntryLongPress 长按条目回调（弹出操作菜单）
- * @param onSelectionAction 多选操作回调（"copy"/"cut"/"delete"）
- * @param onNewFolder 新建文件夹回调（工具栏）
- * @param onSort 排序设置回调（工具栏）
- * @param onMore 更多菜单回调（工具栏）
+ * @param onInteract 面板内任意条目交互（标记活动窗口）
  */
 @Composable
 public fun FilePane(
     state: FilePaneState,
     modifier: Modifier = Modifier,
     onEntryLongPress: (FileEntry) -> Unit = {},
-    onSelectionAction: (String) -> Unit = {},
-    onNewFolder: () -> Unit = {},
-    onSort: () -> Unit = {},
-    onMore: () -> Unit = {},
+    onInteract: () -> Unit = {},
 ) {
     // 组合期副作用：path/刷新计数/排序变化时重新加载目录（缺失将导致列表永不加载）
     state.Effect()
-    Column(modifier = modifier.fillMaxSize()) {
-        // 顶部：多选模式→多选栏；搜索模式→搜索框；否则路径栏
-        when {
-            state.selectionMode ->
-                SelectionBar(
-                    state = state,
-                    onAction = onSelectionAction,
-                    onExit = state::exitSelectionMode,
-                )
-            state.searchActive ->
-                SearchBar(
-                    state = state,
-                    onClose = state::closeSearch,
-                )
-            else ->
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                            .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = { state.back() }, enabled = state.canGoUp) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                    Text(
-                        text = state.path,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    IconButton(onClick = state::openSearch) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = stringResource(R.string.action_search),
-                        )
-                    }
-                    IconButton(onClick = { state.refresh() }) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = stringResource(R.string.action_refresh),
-                        )
-                    }
-                }
-        }
-
-        HorizontalDivider()
-
-        // 内容区：加载 / 错误 / 列表
+    Box(modifier = modifier.fillMaxSize()) {
         when {
             state.isLoading ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -154,165 +99,18 @@ public fun FilePane(
                     modifier = Modifier.fillMaxSize(),
                 )
             else -> {
-                val visible =
-                    if (state.searchActive && state.searchQuery.isNotBlank()) {
-                        state.searchResults
-                    } else {
-                        state.entries
-                    }
+                val searching = state.searchActive && state.searchQuery.isNotBlank()
+                val visible = if (searching) state.searchResults else state.entries
                 EntryList(
+                    state = state,
                     entries = visible,
+                    searching = searching,
                     onOpen = state::open,
                     onLongPress = onEntryLongPress,
-                    isSelected = state::isSelected,
-                    selectionMode = state.selectionMode,
+                    onInteract = onInteract,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
-
-        HorizontalDivider()
-
-        // 底部工具栏：多选模式时由 SelectionBar 占位（顶部），此处仍为常规工具栏
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            if (!state.selectionMode) {
-                IconButton(onClick = onNewFolder) {
-                    Icon(
-                        imageVector = Icons.Filled.CreateNewFolder,
-                        contentDescription = stringResource(R.string.action_new_folder),
-                    )
-                }
-                IconButton(onClick = onSort) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                        contentDescription = stringResource(R.string.action_sort),
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = stringResource(R.string.items_count, state.entries.size),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                IconButton(onClick = onMore) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.action_more),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 多选模式顶栏：全选 + 已选计数 + 批量操作（复制/剪切/删除） + 退出 */
-@Composable
-private fun SelectionBar(
-    state: FilePaneState,
-    onAction: (String) -> Unit,
-    onExit: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        IconButton(onClick = onExit) {
-            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_cancel))
-        }
-        Text(
-            text = stringResource(R.string.selection_count, state.selectedPaths.size),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-        )
-        IconButton(onClick = state::selectAll, enabled = true) {
-            Icon(Icons.Filled.DoneAll, contentDescription = stringResource(R.string.action_select_all))
-        }
-        IconButton(
-            onClick = { onAction("copy") },
-            enabled = state.selectedPaths.isNotEmpty(),
-        ) {
-            Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.action_copy))
-        }
-        IconButton(
-            onClick = { onAction("cut") },
-            enabled = state.selectedPaths.isNotEmpty(),
-        ) {
-            Icon(Icons.Filled.ContentCut, contentDescription = stringResource(R.string.action_cut))
-        }
-        IconButton(
-            onClick = { onAction("delete") },
-            enabled = state.selectedPaths.isNotEmpty(),
-        ) {
-            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
-        }
-    }
-}
-
-/** 搜索模式顶栏：返回 + 关键词输入框（输入防抖后自动执行递归搜索） */
-@Composable
-private fun SearchBar(
-    state: FilePaneState,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    // 输入防抖：停顿 350ms 后自动搜索
-    LaunchedEffect(state.searchQuery) {
-        kotlinx.coroutines.delay(350)
-        state.search(state.searchQuery)
-    }
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onClose) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-        }
-        BasicTextField(
-            value = state.searchQuery,
-            onValueChange = { state.searchQuery = it },
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-            decorationBox = { inner ->
-                Box {
-                    if (state.searchQuery.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.search_hint),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    inner()
-                }
-            },
-        )
-        if (state.isSearching) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
         }
     }
 }
@@ -348,19 +146,26 @@ private fun ErrorPane(
     }
 }
 
+/** 条目列表：顶部可选「..」返回行 + 文件行（MT 风格：无分隔线、白底） */
 @Composable
 private fun EntryList(
+    state: FilePaneState,
     entries: List<FileEntry>,
+    searching: Boolean,
     onOpen: (FileEntry) -> Unit,
     onLongPress: (FileEntry) -> Unit,
-    isSelected: (FileEntry) -> Boolean,
-    selectionMode: Boolean,
+    onInteract: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (entries.isEmpty()) {
+    if (entries.isEmpty() && !state.canGoUp) {
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
             Text(
-                text = stringResource(R.string.empty_folder),
+                text =
+                    if (searching) {
+                        stringResource(R.string.search_no_result)
+                    } else {
+                        stringResource(R.string.empty_folder)
+                    },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -368,53 +173,82 @@ private fun EntryList(
         return
     }
     LazyColumn(modifier = modifier) {
+        if (!searching && state.canGoUp) {
+            item(key = PARENT_ROW_KEY) {
+                ParentRow(
+                    onClick = {
+                        onInteract()
+                        state.up()
+                    },
+                )
+            }
+        }
         items(items = entries, key = { it.path }) { entry ->
             FileRow(
                 entry = entry,
-                onClick = { onOpen(entry) },
-                onLongPress = { onLongPress(entry) },
-                selected = isSelected(entry),
-                selectionMode = selectionMode,
+                selected = state.isSelected(entry),
+                selectionMode = state.selectionMode,
+                onClick = {
+                    onInteract()
+                    onOpen(entry)
+                },
+                onLongPress = {
+                    onInteract()
+                    onLongPress(entry)
+                },
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
     }
 }
 
-/** 列表行：类型图标 + 名称 + 摘要（目录条数 / 大小与时间）；多选模式显示勾选框 */
+/** 「..」返回上级行（MT 惯例：与普通文件夹行同样式，无副标题） */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ParentRow(onClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MtFolderIcon(tint = folderIconTint(), modifier = Modifier.size(40.dp))
+        Text(
+            text = "..",
+            style = rowTitleStyle(),
+            modifier = Modifier.padding(start = 12.dp),
+            maxLines = 1,
+        )
+    }
+}
+
+/** 文件行：类型图标 + 名称 + 摘要；多选模式在行尾显示勾选框，选中行铺浅蓝底 */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     entry: FileEntry,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit,
     selected: Boolean,
     selectionMode: Boolean,
-    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
+    val rowBackground =
+        if (selected) {
+            if (isMtDark()) MtRowSelectedDark else MtRowSelectedLight
+        } else {
+            Color.Transparent
+        }
     Row(
         modifier =
-            modifier
+            Modifier
                 .fillMaxWidth()
+                .background(rowBackground)
                 .combinedClickable(onClick = onClick, onLongClick = onLongPress)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (selectionMode) {
-            Checkbox(checked = selected, onCheckedChange = { onClick() })
-        } else {
-            Icon(
-                imageVector = entry.icon(),
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint =
-                    if (entry.isDirectory) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-            )
-        }
+        MtEntryIcon(entry = entry)
         Column(
             modifier =
                 Modifier
@@ -423,46 +257,117 @@ private fun FileRow(
         ) {
             Text(
                 text = entry.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (entry.isDirectory) FontWeight.Medium else FontWeight.Normal,
+                style = rowTitleStyle(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = entry.subtitle(),
-                style = MaterialTheme.typography.labelSmall,
+                style = TextStyle(fontSize = 12.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        if (selectionMode) {
+            Checkbox(checked = selected, onCheckedChange = { onClick() })
+        }
     }
 }
 
+/** 判定当前是否深色主题（MT 双色板按背景色识别，避免引入全局状态） */
+@Composable
+private fun isMtDark(): Boolean = MaterialTheme.colorScheme.background == MtSurfaceDark
+
+@Composable
+private fun folderIconTint(): Color = if (isMtDark()) MtFolderDark else MtFolderLight
+
+private fun rowTitleStyle(): TextStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal)
+
 /**
- * 条目摘要文案：目录返回空串（子项计数需引擎遍历支持，Phase 1 ② 提供），
- * 文件返回「大小 + 修改时间」。
+ * 条目摘要文案：目录返回修改时间（MT 惯例），文件返回「大小 + 修改时间」。
  */
 private fun FileEntry.subtitle(): String =
     when {
-        isDirectory -> ""
+        isDirectory -> Format.modifiedTime(lastModified)
         else ->
             listOf(Format.fileSize(sizeBytes), Format.modifiedTime(lastModified))
                 .filter { it.isNotEmpty() }
                 .joinToString("  ")
     }
 
-/** 依据名称与类型推断展示图标 */
-private fun FileEntry.icon(): ImageVector =
+/** 条目图标：目录为自绘 MT 立体文件夹；文件为按类型着色的矢量图标（40dp 视觉框内居中） */
+@Composable
+private fun MtEntryIcon(entry: FileEntry) {
+    if (entry.isDirectory) {
+        MtFolderIcon(tint = folderIconTint(), modifier = Modifier.size(40.dp))
+    } else {
+        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = entry.fileIcon(),
+                contentDescription = null,
+                modifier = Modifier.size(30.dp),
+                tint = entry.iconColor(),
+            )
+        }
+    }
+}
+
+/** MT 立体文件夹：炭黄双色调圆角夹体 + 左侧内页白纸 */
+@Composable
+private fun MtFolderIcon(
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val radius = CornerRadius(w * 0.09f, w * 0.09f)
+        // 夹耳（顶部小圆角块）
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(w * 0.10f, h * 0.16f),
+            size = Size(w * 0.46f, h * 0.24f),
+            cornerRadius = radius,
+        )
+        // 夹体
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(w * 0.08f, h * 0.28f),
+            size = Size(w * 0.84f, h * 0.54f),
+            cornerRadius = radius,
+        )
+        // 左侧内页（白纸）
+        drawRoundRect(
+            color = MtFolderSheet,
+            topLeft = Offset(w * 0.17f, h * 0.42f),
+            size = Size(w * 0.13f, h * 0.30f),
+            cornerRadius = CornerRadius(w * 0.03f, w * 0.03f),
+        )
+    }
+}
+
+/** 依据名称与类型推断文件图标（目录不适用） */
+private fun FileEntry.fileIcon(): ImageVector =
     when {
-        isDirectory -> Icons.Filled.Folder
         isApkLike() -> Icons.Filled.Android
         isArchive() -> Icons.Filled.FolderZip
         isImage() -> Icons.Filled.Image
         isAudio() -> Icons.Filled.MusicNote
         isVideo() -> Icons.Filled.Movie
-        isTextLike() -> Icons.Filled.Description
+        isTextLike() -> Icons.AutoMirrored.Filled.InsertDriveFile
         else -> Icons.AutoMirrored.Filled.InsertDriveFile
+    }
+
+private fun FileEntry.iconColor(): Color =
+    when {
+        isApkLike() -> MtIconApk
+        isArchive() -> MtIconArchive
+        isImage() -> MtIconImage
+        isAudio() -> MtIconAudio
+        isVideo() -> MtIconVideo
+        isTextLike() -> MtIconText
+        else -> MtIconGeneric
     }
 
 private fun FileEntry.isApkLike(): Boolean =

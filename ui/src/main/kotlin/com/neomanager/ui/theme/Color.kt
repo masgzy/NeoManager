@@ -7,65 +7,47 @@ package com.neomanager.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Neo 品牌色板（低版本回退方案）。
+ * MT 风格经典色板（0.2.0-alpha05 起）。
  *
- * 主品牌色取深青绿（Teal）系——与「本地化 / 轻量 / 工具感」的产品气质匹配；
- * Android 12+ 用户看到的是系统动态取色，此色板仅在 API 26-31 与关闭动态取色时生效。
- * 色值为手工调校的 Material 3 色调映射，明暗两套保持同色相。
+ * 视觉基准为 MT 管理器浅色主题：炭黑共享顶栏 + 纯白列表 + 黑字灰副标题 + 蓝色强调；
+ * 深色主题为同构映射（纯黑列表 + 亮字），文件夹图标按 MT 惯例浅色炭灰、深色琥珀黄。
+ * 固定取色、不随壁纸动态变化，保证与参考观感一致；
+ * 首组常量为共享顶栏/状态栏区域的炭黑底与白字。
  */
 
-val BrandPrimaryLight = Color(0xFF006B5C)
-val BrandOnPrimaryLight = Color(0xFFFFFFFF)
-val BrandPrimaryContainerLight = Color(0xFF7BF5DE)
-val BrandOnPrimaryContainerLight = Color(0xFF00201B)
+public val MtChrome = Color(0xFF2B2B2B)
+public val MtChromeOn = Color(0xFFFFFFFF)
+public val MtChromeOnDim = Color(0xB3FFFFFF)
+public val MtChromeUnderline = Color(0xFF6B6B6B)
 
-val BrandPrimaryDark = Color(0xFF57D9C3)
-val BrandOnPrimaryDark = Color(0xFF00382F)
-val BrandPrimaryContainerDark = Color(0xFF005045)
-val BrandOnPrimaryContainerDark = Color(0xFF7BF5DE)
+// 浅色主题
+public val MtSurfaceLight = Color(0xFFFFFFFF)
+public val MtOnSurfaceLight = Color(0xFF212121)
+public val MtOnSurfaceVariantLight = Color(0xFF757575)
+public val MtPrimaryLight = Color(0xFF1E7AD4)
+public val MtOutlineVariantLight = Color(0xFFDCDCDC)
+public val MtSurfaceVariantLight = Color(0xFFF2F2F2)
+public val MtRowSelectedLight = Color(0xFFD9E9F9)
 
-val BrandSecondaryLight = Color(0xFF4A635D)
-val BrandOnSecondaryLight = Color(0xFFFFFFFF)
-val BrandSecondaryContainerLight = Color(0xFFCCE8E0)
-val BrandOnSecondaryContainerLight = Color(0xFF06201A)
+// 深色主题
+public val MtSurfaceDark = Color(0xFF121212)
+public val MtOnSurfaceDark = Color(0xFFE0E0E0)
+public val MtOnSurfaceVariantDark = Color(0xFF9E9E9E)
+public val MtPrimaryDark = Color(0xFF64B5F6)
+public val MtOutlineVariantDark = Color(0xFF333333)
+public val MtSurfaceVariantDark = Color(0xFF262626)
+public val MtRowSelectedDark = Color(0xFF37474F)
 
-val BrandSecondaryDark = Color(0xFFB1CCC4)
-val BrandOnSecondaryDark = Color(0xFF1C3530)
-val BrandSecondaryContainerDark = Color(0xFF334B45)
-val BrandOnSecondaryContainerDark = Color(0xFFCCE8E0)
+// 文件夹图标（浅色炭灰立体夹 / 深色 MT 经典黄夹）
+public val MtFolderLight = Color(0xFF3B3B3B)
+public val MtFolderDark = Color(0xFFFFCA28)
+public val MtFolderSheet = Color(0xFFF4F4F4)
 
-val BrandTertiaryLight = Color(0xFF8A5100)
-val BrandOnTertiaryLight = Color(0xFFFFFFFF)
-val BrandTertiaryContainerLight = Color(0xFFFFDCBA)
-val BrandOnTertiaryContainerLight = Color(0xFF2C1600)
-
-val BrandTertiaryDark = Color(0xFFFFB868)
-val BrandOnTertiaryDark = Color(0xFF4A2800)
-val BrandTertiaryContainerDark = Color(0xFF693C00)
-val BrandOnTertiaryContainerDark = Color(0xFFFFDCBA)
-
-val BrandErrorLight = Color(0xFFBA1A1A)
-val BrandOnErrorLight = Color(0xFFFFFFFF)
-val BrandErrorContainerLight = Color(0xFFFFDAD6)
-val BrandOnErrorContainerLight = Color(0xFF410002)
-
-val BrandErrorDark = Color(0xFFFFB4AB)
-val BrandOnErrorDark = Color(0xFF690005)
-val BrandErrorContainerDark = Color(0xFF93000A)
-val BrandOnErrorContainerDark = Color(0xFFFFDAD6)
-
-val BrandBackgroundLight = Color(0xFFF5FBF7)
-val BrandOnBackgroundLight = Color(0xFF161D1B)
-val BrandSurfaceLight = Color(0xFFF5FBF7)
-val BrandOnSurfaceLight = Color(0xFF161D1B)
-val BrandSurfaceVariantLight = Color(0xFFDBE5E1)
-val BrandOnSurfaceVariantLight = Color(0xFF3F4946)
-val BrandOutlineLight = Color(0xFF6F7976)
-
-val BrandBackgroundDark = Color(0xFF0E1513)
-val BrandOnBackgroundDark = Color(0xFFDBE5E1)
-val BrandSurfaceDark = Color(0xFF0E1513)
-val BrandOnSurfaceDark = Color(0xFFDBE5E1)
-val BrandSurfaceVariantDark = Color(0xFF3F4946)
-val BrandOnSurfaceVariantDark = Color(0xFFBFC9C5)
-val BrandOutlineDark = Color(0xFF89938F)
+// 文件类型图标（明暗共用，中饱和度）
+public val MtIconApk = Color(0xFF43A047)
+public val MtIconArchive = Color(0xFF8D6E63)
+public val MtIconImage = Color(0xFF5C6BC0)
+public val MtIconAudio = Color(0xFFAB47BC)
+public val MtIconVideo = Color(0xFF42A5F5)
+public val MtIconText = Color(0xFF78909C)
+public val MtIconGeneric = Color(0xFF90A4AE)
