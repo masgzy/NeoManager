@@ -6,6 +6,7 @@ package com.neomanager.ui.dualpane
 
 import android.os.StatFs
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,16 +19,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -47,10 +52,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,10 +79,11 @@ private val MtBottomIcon = Color(0xFF3B3B3B)
 private val MtBottomIconDim = Color(0xFFBDBDBD)
 
 /**
- * MT 风格共享顶栏（0.2.0-alpha05）。
+ * MT 风格共享顶栏（0.2.0-alpha06）。
  *
- * 三种形态互斥切换（均作用于活动窗口 [state]）：
- * - 常规：汉堡菜单 + 大号路径 + 统计副标题（目录数/文件数/储存） + 溢出菜单；
+ * 四种形态互斥切换（均作用于活动窗口 [state]）：
+ * - 常规：汉堡（开侧边抽屉） + 大号路径（点击进入路径跳转） + 统计副标题 + 溢出菜单；
+ * - 路径输入：编辑图标 + 下划线输入框 + 确认/关闭；
  * - 搜索：搜索图标 + 下划线输入框 + 关闭；
  * - 多选：关闭 + 已选计数 + 全选 + 复制/剪切/删除。
  */
@@ -82,72 +91,150 @@ private val MtBottomIconDim = Color(0xFFBDBDBD)
 public fun MtTopBar(
     state: FilePaneState,
     modifier: Modifier = Modifier,
-    pasteEnabled: Boolean,
-    onPaste: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onNavigatePath: (String) -> Unit,
+    onAddBookmark: () -> Unit,
+    onSetHome: () -> Unit,
     onSort: () -> Unit,
     onSwapWindows: () -> Unit,
-    onOpenSettings: () -> Unit,
     onSelectionAction: (String) -> Unit,
 ) {
+    var pathEditing by remember { mutableStateOf(false) }
     Column(modifier = modifier.background(MtChrome)) {
         Column(Modifier.statusBarsPadding()) {
             when {
                 state.selectionMode -> SelectionBar(state = state, onAction = onSelectionAction)
                 state.searchActive -> SearchBar(state = state)
+                pathEditing ->
+                    PathInputBar(
+                        state = state,
+                        onClose = { pathEditing = false },
+                    ) { resolved ->
+                        pathEditing = false
+                        onNavigatePath(resolved)
+                    }
                 else ->
                     PathBar(
                         state = state,
-                        pasteEnabled = pasteEnabled,
-                        onPaste = onPaste,
+                        onOpenDrawer = onOpenDrawer,
+                        onEditPath = { pathEditing = true },
                         onSort = onSort,
+                        onAddBookmark = onAddBookmark,
+                        onSetHome = onSetHome,
                         onSwapWindows = onSwapWindows,
-                        onOpenSettings = onOpenSettings,
                     )
             }
         }
     }
 }
 
-/** 常规形态：汉堡 + 路径/统计 + 溢出菜单 */
+/** 路径跳转输入：下划线输入 + 确认/关闭（接受完整 URI 或本地绝对路径） */
+@Composable
+private fun PathInputBar(
+    state: FilePaneState,
+    onClose: () -> Unit,
+    onNavigate: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf(state.path) }
+    var invalid by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    fun submit() {
+        val resolved = resolvePathInput(text)
+        if (resolved == null) {
+            invalid = true
+        } else {
+            onNavigate(resolved)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(60.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Edit,
+            contentDescription = null,
+            tint = MtChromeOnDim,
+            modifier = Modifier.padding(start = 20.dp).size(22.dp),
+        )
+        Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            if (text.isBlank()) {
+                Text(
+                    text = stringResource(R.string.path_jump_hint),
+                    style = TextStyle(fontSize = 15.sp),
+                    color = MtChromeOnDim,
+                    maxLines = 1,
+                )
+            }
+            Column {
+                BasicTextField(
+                    value = text,
+                    onValueChange = {
+                        text = it
+                        invalid = false
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 15.sp, color = MtChromeOn),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(if (invalid) InvalidUnderline else MtChromeUnderline),
+                )
+                if (invalid) {
+                    Text(
+                        text = stringResource(R.string.path_jump_invalid),
+                        style = TextStyle(fontSize = 12.sp),
+                        color = InvalidUnderline,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+        IconButton(onClick = ::submit) {
+            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.action_ok), tint = MtChromeOn)
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_cancel), tint = MtChromeOn)
+        }
+    }
+}
+
+/** 路径输入非法时的下划线/提示色 */
+private val InvalidUnderline = Color(0xFFE57373)
+
+/** 常规形态：汉堡（抽屉） + 可点击路径/统计 + 溢出菜单 */
 @Composable
 private fun PathBar(
     state: FilePaneState,
-    pasteEnabled: Boolean,
-    onPaste: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onEditPath: () -> Unit,
     onSort: () -> Unit,
+    onAddBookmark: () -> Unit,
+    onSetHome: () -> Unit,
     onSwapWindows: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
-    var hamburgerOpen by remember { mutableStateOf(false) }
     var overflowOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().height(64.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            IconButton(onClick = { hamburgerOpen = true }) {
-                Icon(Icons.Filled.Menu, contentDescription = null, tint = MtChromeOn)
-            }
-            DropdownMenu(expanded = hamburgerOpen, onDismissRequest = { hamburgerOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_paste_plain)) },
-                    onClick = {
-                        hamburgerOpen = false
-                        onPaste()
-                    },
-                    enabled = pasteEnabled,
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_settings)) },
-                    onClick = {
-                        hamburgerOpen = false
-                        onOpenSettings()
-                    },
-                )
-            }
+        IconButton(onClick = onOpenDrawer) {
+            Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.drawer_open), tint = MtChromeOn)
         }
         Column(
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp)
+                    .clickable(onClick = onEditPath),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -189,6 +276,20 @@ private fun PathBar(
                     onClick = {
                         overflowOpen = false
                         state.enterSelectAllMode()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_add_bookmark)) },
+                    onClick = {
+                        overflowOpen = false
+                        onAddBookmark()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_set_home)) },
+                    onClick = {
+                        overflowOpen = false
+                        onSetHome()
                     },
                 )
                 DropdownMenuItem(

@@ -36,9 +36,15 @@ jobs:
       - name: assembleDebug + engine-core 单测 + ktlint
         run: ./gradlew assembleDebug :engine-core:test ktlintCheck --stacktrace
 
-      - name: 上传 Debug APK
+      - name: 生成 APK SHA-256 校验和
+        run: |
+          sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app-debug.apk.sha256
+
+      - name: 上传 Debug APK（含校验和）
         uses: actions/upload-artifact@v7
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app-debug.apk.sha256
           if-no-files-found: warn

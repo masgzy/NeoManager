@@ -1,0 +1,54 @@
+# NeoManager 自动发布工作流
+#
+# 触发：推送 v* 标签
+# 职责：assembleDebug + engine-core 单测 → 生成 SHA-256 → 创建 GitHub Release
+#       并上传 APK 与校验和文件，附下载后校验说明（防传输损坏，0.2.0-alpha05 教训）
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    name: 构建 & 发布
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 配置 JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 配置 Gradle（含依赖缓存）
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: assembleDebug + engine-core 单测
+        run: ./gradlew assembleDebug :engine-core:test --stacktrace
+
+      - name: 整理发布产物（重命名 + SHA-256）
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cp app/build/outputs/apk/debug/app-debug.apk "NeoManager-${VERSION}-debug.apk"
+          sha256sum "NeoManager-${VERSION}-debug.apk" > "NeoManager-${VERSION}-debug.apk.sha256"
+          cat "NeoManager-${VERSION}-debug.apk.sha256"
+
+      - name: 创建 Release 并上传 APK + 校验和
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: "${{ github.ref_name }}"
+        run: |
+          VERSION_PLAIN="${VERSION#v}"
+          gh release create "$VERSION" \
+            --title "$VERSION_PLAIN" \
+            --notes "自动化构建。下载后建议校验：\`sha256sum -c NeoManager-${VERSION_PLAIN}-debug.apk.sha256\`" \
+            "NeoManager-${VERSION_PLAIN}-debug.apk" \
+            "NeoManager-${VERSION_PLAIN}-debug.apk.sha256"

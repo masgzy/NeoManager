@@ -99,4 +99,21 @@
     <string name="settings_repo_url">https://github.com/masgzy/NeoManager</string>
     <string name="settings_privacy_title">本地化承诺</string>
     <string name="settings_privacy_body">本应用不联网、无遥测、无广告，所有操作均在设备本地完成。</string>
+
+    <!-- 侧边抽屉（0.2.0-alpha06） -->
+    <string name="drawer_open">打开侧边抽屉</string>
+    <string name="drawer_storage">存储位置</string>
+    <string name="drawer_bookmarks">书签</string>
+    <string name="drawer_history">历史记录</string>
+    <string name="drawer_empty_bookmarks">暂无书签，点 + 添加当前目录</string>
+    <string name="action_add_bookmark">添加书签</string>
+    <string name="bookmark_added">已添加书签</string>
+    <string name="bookmark_exists">书签已存在</string>
+    <string name="action_clear_history">清除历史</string>
+    <string name="action_set_home">设为首页</string>
+    <string name="home_set">已设为首页，下次启动生效</string>
+
+    <!-- 路径跳转（0.2.0-alpha06） -->
+    <string name="path_jump_hint">输入路径跳转（支持 file:// 或绝对路径）</string>
+    <string name="path_jump_invalid">无效路径</string>
 </resources>

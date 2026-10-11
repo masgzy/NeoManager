@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,6 +55,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.neomanager.engine.core.vfs.VfsRegistry
 import com.neomanager.engine.core.vfs.VfsUri
 import com.neomanager.ui.R
+import com.neomanager.ui.bookmark.UiStateStore
 import com.neomanager.ui.dualpane.actions.ActionTarget
 import com.neomanager.ui.dualpane.actions.DialogKind
 import com.neomanager.ui.dualpane.actions.FileActionsController
@@ -96,7 +100,20 @@ public fun DualPaneScreen(
             @Suppress("DEPRECATION")
             Environment.getExternalStorageDirectory()?.absolutePath ?: FilePaneState.ROOT_PATH
         }
-    val startUri = remember { VfsUri.ofLocal(startPath).value }
+    // 抽屉导航状态（书签/历史/首页持久化）
+    val uiStore = remember { UiStateStore.default(context) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    val startUri =
+        remember {
+            // 首页路径优先（溢出菜单「设为首页」）；未设置或失效时回退内部存储根
+            val home = uiStore.homePath()
+            if (home != null && VfsUri.parseOrNull(home) != null) {
+                home
+            } else {
+                VfsUri.ofLocal(startPath).value
+            }
+        }
 
     val leftState = remember { FilePaneState(startUri, browser) }
     val rightState = remember { FilePaneState(startUri, browser) }
@@ -154,6 +171,12 @@ public fun DualPaneScreen(
     // 操作结果提示
     LaunchedEffect(Unit) {
         controller.toasts.collect { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+    }
+
+    // 浏览历史：双窗格任一路径变化即写入（抽屉历史区展示）
+    LaunchedEffect(Unit) {
+        launch { snapshotFlow { leftState.path }.collect { uiStore.recordHistory(it) } }
+        launch { snapshotFlow { rightState.path }.collect { uiStore.recordHistory(it) } }
     }
 
     // Android 8-10：传统存储权限首启一次性请求
@@ -216,51 +239,76 @@ public fun DualPaneScreen(
         }
     }
 
-    Column(modifier = modifier) {
-        if (!hasAllFilesAccess) {
-            AllFilesAccessBanner(
-                packageName = context.packageName,
-                onResolved = { hasAllFilesAccess = checkAllFilesAccess() },
+    NeoDrawerScaffold(
+        drawerState = drawerState,
+        activeState = activeState,
+        store = uiStore,
+        onNavigate = { uri -> activeState.openPath(uri) },
+        onOpenSettings = onOpenSettings,
+    ) {
+        Column(modifier = modifier) {
+            if (!hasAllFilesAccess) {
+                AllFilesAccessBanner(
+                    packageName = context.packageName,
+                    onResolved = { hasAllFilesAccess = checkAllFilesAccess() },
+                )
+            }
+            MtTopBar(
+                state = activeState,
+                onOpenDrawer = { scope.launch { drawerState.open() } },
+                onNavigatePath = { uri -> activeState.openPath(uri) },
+                onAddBookmark = {
+                    val added =
+                        uiStore.addBookmark(
+                            name = displayNameFor(activeState.path),
+                            path = activeState.path,
+                        )
+                    val message =
+                        if (added) {
+                            context.getString(R.string.bookmark_added)
+                        } else {
+                            context.getString(R.string.bookmark_exists)
+                        }
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                },
+                onSetHome = {
+                    uiStore.setHomePath(activeState.path)
+                    Toast.makeText(context, context.getString(R.string.home_set), Toast.LENGTH_SHORT).show()
+                },
+                onSort = { sortDialog = SortDialogState(activeState) },
+                onSwapWindows = {
+                    val left = leftState.path
+                    leftState.setPathInstant(rightState.path)
+                    rightState.setPathInstant(left)
+                },
+                onSelectionAction = { action -> handleSelectionAction(activeState, action) },
+            )
+            Box(Modifier.weight(1f)) {
+                DualPaneLayout(
+                    first = {
+                        PaneHost(
+                            state = leftState,
+                            onActivate = { activeIndex = 0 },
+                            onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
+                        )
+                    },
+                    second = {
+                        PaneHost(
+                            state = rightState,
+                            onActivate = { activeIndex = 1 },
+                            onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
+                        )
+                    },
+                )
+            }
+            MtBottomBar(
+                state = activeState,
+                pasteEnabled = controller.clipboardCount() > 0,
+                onNewFolder = { dialog = DialogKind.NewFolder },
+                onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
+                onSync = { otherPaneOf(activeState, states).setPathInstant(activeState.path) },
             )
         }
-        MtTopBar(
-            state = activeState,
-            pasteEnabled = controller.clipboardCount() > 0,
-            onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
-            onSort = { sortDialog = SortDialogState(activeState) },
-            onSwapWindows = {
-                val left = leftState.path
-                leftState.setPathInstant(rightState.path)
-                rightState.setPathInstant(left)
-            },
-            onOpenSettings = onOpenSettings,
-            onSelectionAction = { action -> handleSelectionAction(activeState, action) },
-        )
-        Box(Modifier.weight(1f)) {
-            DualPaneLayout(
-                first = {
-                    PaneHost(
-                        state = leftState,
-                        onActivate = { activeIndex = 0 },
-                        onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
-                    )
-                },
-                second = {
-                    PaneHost(
-                        state = rightState,
-                        onActivate = { activeIndex = 1 },
-                        onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
-                    )
-                },
-            )
-        }
-        MtBottomBar(
-            state = activeState,
-            pasteEnabled = controller.clipboardCount() > 0,
-            onNewFolder = { dialog = DialogKind.NewFolder },
-            onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
-            onSync = { otherPaneOf(activeState, states).setPathInstant(activeState.path) },
-        )
     }
 
     // 底部操作菜单
