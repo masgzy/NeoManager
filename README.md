@@ -16,6 +16,8 @@ Kotlin · Jetpack Compose · Material You · GPL-3.0-or-later
 
 ---
 
+目前我仅周末可更新，可能后面由于我的技术有限，Vibe不动了，可能就废弃了。
+
 ## 项目状态
 
 **当前进度：Phase 1 ②（引擎接入）已完成** ✅ —— 统一 IO 引擎 + zip 内部浏览 +
