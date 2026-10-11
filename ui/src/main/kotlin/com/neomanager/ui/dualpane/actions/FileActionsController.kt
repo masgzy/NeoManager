@@ -8,6 +8,7 @@ import com.neomanager.engine.core.archive.ArchiveEngine
 import com.neomanager.engine.core.vfs.FileOps
 import com.neomanager.engine.core.vfs.VfsRegistry
 import com.neomanager.engine.core.vfs.VfsUri
+import com.neomanager.ui.bookmark.UiStateStore
 import com.neomanager.ui.file.FileEntry
 import com.neomanager.ui.file.FilePaneState
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * 文件操作控制器：剪贴板、新建/重命名/删除/压缩/解压/粘贴。
@@ -130,7 +133,7 @@ public class FileActionsController(
         }
     }
 
-    /** 删除（递归） */
+    /** 删除（递归，直接永久删除） */
     public suspend fun delete(
         entries: List<FileEntry>,
         pane: FilePaneState,
@@ -144,6 +147,101 @@ public class FileActionsController(
             }
             pane.refresh()
             "已删除 $ok 项"
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 回收站（0.2.0-alpha08，观察规格第 8 节）
+    // ------------------------------------------------------------------
+
+    /**
+     * 移入回收站：本地条目移动到 [trashDir]（时间戳前缀防同名冲突），
+     * 索引（回收站名 → 原路径）写入 [store]。压缩包内等非本地条目不适用，由调用方先行过滤。
+     */
+    public suspend fun moveToTrash(
+        entries: List<FileEntry>,
+        pane: FilePaneState,
+        trashDir: File,
+        store: UiStateStore,
+    ) {
+        runAndReport("移入回收站") {
+            val dirUri = VfsUri.ofLocal(trashDir.absolutePath)
+            val backend = registry.resolve(dirUri)
+            backend.mkdir(dirUri).getOrThrow()
+            val stamp = LocalDateTime.now().format(TRASH_STAMP)
+            var ok = 0
+            for (entry in entries) {
+                val source = VfsUri.parseOrNull(entry.path) ?: continue
+                if (!source.isLocal) continue
+                val moved = ops.moveInto(source, dirUri).getOrThrow()
+                // 同批同名冲突时补序号（时间戳只到秒）
+                var candidate = "${stamp}_${entry.name}"
+                var n = 1
+                while (backend.exists(dirUri.resolve(candidate))) {
+                    candidate = "${stamp}_${n}_${entry.name}"
+                    n++
+                }
+                if (moved.name != candidate) {
+                    backend.rename(moved, candidate).getOrThrow()
+                }
+                store.recordTrashItem(candidate, entry.path)
+                ok++
+            }
+            pane.refresh()
+            "已移入回收站 $ok 项"
+        }
+    }
+
+    /** 从回收站恢复条目到原始位置（索引丢失时回落到内部存储根，避免数据不可达） */
+    public suspend fun restoreFromTrash(
+        entries: List<FileEntry>,
+        pane: FilePaneState,
+        trashDir: File,
+        store: UiStateStore,
+    ) {
+        runAndReport("恢复") {
+            val index = store.trashIndex().toMap()
+            var ok = 0
+            val restored = mutableListOf<String>()
+            for (entry in entries) {
+                val uri = VfsUri.parseOrNull(entry.path) ?: continue
+                if (!uri.isLocal) continue
+                val original = index[entry.name]
+                val targetDir =
+                    if (original != null) {
+                        VfsUri.parseOrNull(original)?.parent()
+                    } else {
+                        null
+                    } ?: VfsUri.ofLocal(trashDir.parent ?: "/")
+                ops.moveInto(uri, targetDir).getOrThrow()
+                restored += entry.name
+                ok++
+            }
+            store.removeTrashItems(restored)
+            pane.refresh()
+            "已恢复 $ok 项"
+        }
+    }
+
+    /** 清空回收站：删除目录内全部条目并清空索引 */
+    public suspend fun emptyTrash(
+        pane: FilePaneState,
+        trashDir: File,
+        store: UiStateStore,
+    ) {
+        runAndReport("清空回收站") {
+            val dirUri = VfsUri.ofLocal(trashDir.absolutePath)
+            val backend = registry.resolve(dirUri)
+            var ok = 0
+            if (backend.exists(dirUri)) {
+                for (child in backend.list(dirUri).getOrDefault(emptyList())) {
+                    backend.delete(child.uri, recursive = true).getOrThrow()
+                    ok++
+                }
+            }
+            store.clearTrashIndex()
+            pane.refresh()
+            "已清空回收站（$ok 项）"
         }
     }
 
@@ -221,5 +319,10 @@ public class FileActionsController(
 
     private fun emit(message: String) {
         _toasts.tryEmit(message)
+    }
+
+    private companion object {
+        /** 回收站条目名时间戳前缀（精确到秒，与序号去重配合防冲突） */
+        val TRASH_STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
     }
 }

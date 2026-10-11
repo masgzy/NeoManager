@@ -72,6 +72,7 @@ import com.neomanager.ui.file.EngineFileBrowser
 import com.neomanager.ui.file.FileEntry
 import com.neomanager.ui.file.FilePane
 import com.neomanager.ui.file.FilePaneState
+import com.neomanager.ui.trash.Trash
 import com.neomanager.ui.util.OpenWith
 import kotlinx.coroutines.launch
 
@@ -133,6 +134,14 @@ public fun DualPaneScreen(
     // 活动窗口：共享顶栏/底栏的操作目标
     var activeIndex by remember { mutableIntStateOf(0) }
     val activeState = states[activeIndex]
+
+    // 单栏/双栏布局（0.2.0-alpha08，持久化；单栏时活动窗格全宽展示）
+    var singlePane by remember { mutableStateOf(uiStore.isSinglePane()) }
+
+    fun toggleSinglePane() {
+        singlePane = !singlePane
+        uiStore.setSinglePane(singlePane)
+    }
 
     // 手动隐藏列表（两层隐藏开关中的「用户隐藏」，重载时现取保证即时生效）
     leftState.manualHiddenProvider = { uiStore.hiddenPaths() }
@@ -248,7 +257,15 @@ public fun DualPaneScreen(
         })
     }
 
-    // 多选批量操作分发：复制/剪切 → 剪贴板；删除 → 确认框（带来源面板）
+    /** 回收站可用性：全部为本地条目且不在回收站内部（规格第 8 节：回收站内删除直接永久） */
+    fun canTrash(
+        pane: FilePaneState,
+        entries: List<FileEntry>,
+    ): Boolean =
+        !Trash.isInside(pane.path) &&
+            entries.all { VfsUri.parseOrNull(it.path)?.isLocal == true }
+
+    // 多选批量操作分发：复制/剪切 → 剪贴板；删除 → 确认框（本地条目可先入回收站）
     fun handleSelectionAction(
         pane: FilePaneState,
         action: String,
@@ -266,7 +283,7 @@ public fun DualPaneScreen(
             }
             "delete" -> {
                 pane.exitSelectionMode()
-                dialog = DialogKind.ConfirmDelete(picked, pane)
+                dialog = DialogKind.ConfirmDelete(picked, pane, canTrash = canTrash(pane, picked))
             }
         }
     }
@@ -296,9 +313,12 @@ public fun DualPaneScreen(
 
     NeoDrawerScaffold(
         drawerState = drawerState,
-        activeState = activeState,
         store = uiStore,
         onNavigate = { uri -> activeState.openPath(uri) },
+        onOpenTrash = { activeState.openPath(Trash.dirUri()) },
+        onAddBookmark = {
+            dialog = DialogKind.AddBookmark(activeState.path, displayNameFor(activeState.path))
+        },
         onOpenSettings = onOpenSettings,
     ) {
         Column(modifier = modifier) {
@@ -310,21 +330,11 @@ public fun DualPaneScreen(
             }
             MtTopBar(
                 state = activeState,
+                singlePane = singlePane,
                 onOpenDrawer = { scope.launch { drawerState.open() } },
                 onNavigatePath = { uri -> activeState.openPath(uri) },
                 onAddBookmark = {
-                    val added =
-                        uiStore.addBookmark(
-                            name = displayNameFor(activeState.path),
-                            path = activeState.path,
-                        )
-                    val message =
-                        if (added) {
-                            context.getString(R.string.bookmark_added)
-                        } else {
-                            context.getString(R.string.bookmark_exists)
-                        }
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    dialog = DialogKind.AddBookmark(activeState.path, displayNameFor(activeState.path))
                 },
                 onSetHome = {
                     uiStore.setHomePath(activeState.path)
@@ -336,30 +346,41 @@ public fun DualPaneScreen(
                     leftState.setPathInstant(rightState.path)
                     rightState.setPathInstant(left)
                 },
+                onToggleSinglePane = { toggleSinglePane() },
                 onHideSelected = { hideSelected(activeState) },
                 onToggleSystemHidden = { toggleSystemHidden() },
                 onToggleManualHidden = { toggleManualHidden() },
                 onSelectionAction = { action -> handleSelectionAction(activeState, action) },
             )
             Box(Modifier.weight(1f)) {
-                DualPaneLayout(
-                    first = {
-                        PaneHost(
-                            state = leftState,
-                            onActivate = { activeIndex = 0 },
-                            onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
-                            onOpenSettings = onOpenSettings,
-                        )
-                    },
-                    second = {
-                        PaneHost(
-                            state = rightState,
-                            onActivate = { activeIndex = 1 },
-                            onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
-                            onOpenSettings = onOpenSettings,
-                        )
-                    },
-                )
+                if (singlePane) {
+                    // 单栏模式：活动窗格全宽（0.2.0-alpha08，根治窄屏双列拥挤）
+                    PaneHost(
+                        state = activeState,
+                        onActivate = { },
+                        onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, activeState) },
+                        onOpenSettings = onOpenSettings,
+                    )
+                } else {
+                    DualPaneLayout(
+                        first = {
+                            PaneHost(
+                                state = leftState,
+                                onActivate = { activeIndex = 0 },
+                                onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
+                                onOpenSettings = onOpenSettings,
+                            )
+                        },
+                        second = {
+                            PaneHost(
+                                state = rightState,
+                                onActivate = { activeIndex = 1 },
+                                onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
+                                onOpenSettings = onOpenSettings,
+                            )
+                        },
+                    )
+                }
                 // 右下角 FAB：点击或上滑打开书签/历史快速面板（MT「底栏上滑」惯例的落地形态）
                 var fabDrag by remember { mutableFloatStateOf(0f) }
                 FloatingActionButton(
@@ -390,6 +411,7 @@ public fun DualPaneScreen(
             MtBottomBar(
                 state = activeState,
                 pasteEnabled = controller.clipboardCount() > 0,
+                singlePane = singlePane,
                 onCreate = { dialog = DialogKind.Create },
                 onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
                 onSync = { otherPaneOf(activeState, states).setPathInstant(activeState.path) },
@@ -400,11 +422,14 @@ public fun DualPaneScreen(
     // 书签/历史快速面板（FAB 弹出）
     if (quickSheet) {
         NeoQuickSheet(
-            activeState = activeState,
             store = uiStore,
             onNavigate = { uri ->
                 quickSheet = false
                 activeState.openPath(uri)
+            },
+            onAddBookmark = {
+                quickSheet = false
+                dialog = DialogKind.AddBookmark(activeState.path, displayNameFor(activeState.path))
             },
             onDismiss = { quickSheet = false },
         )
@@ -415,6 +440,7 @@ public fun DualPaneScreen(
         ModalBottomSheet(onDismissRequest = { actionTarget = null }) {
             EntryActionSheet(
                 target = target,
+                inTrash = Trash.isInside(target.pane.path),
                 onDismiss = { actionTarget = null },
                 onAction = { action ->
                     actionTarget = null
@@ -432,7 +458,17 @@ public fun DualPaneScreen(
                         "copy" -> controller.copyToClipboard(listOf(target.entry), target.pane, moveMode = false)
                         "move" -> controller.copyToClipboard(listOf(target.entry), target.pane, moveMode = true)
                         "rename" -> dialog = DialogKind.Rename(target.entry)
-                        "delete" -> dialog = DialogKind.ConfirmDelete(listOf(target.entry), target.pane)
+                        "delete" ->
+                            dialog =
+                                DialogKind.ConfirmDelete(
+                                    listOf(target.entry),
+                                    target.pane,
+                                    canTrash = canTrash(target.pane, listOf(target.entry)),
+                                )
+                        "restore" ->
+                            scope.launch {
+                                controller.restoreFromTrash(listOf(target.entry), target.pane, Trash.dir(), uiStore)
+                            }
                         "compress" -> dialog = DialogKind.Compress(target.entry)
                         "extract" -> scope.launch { controller.extractEntry(target.entry, target.pane) }
                         "properties" -> dialog = DialogKind.Properties(target.entry)
@@ -513,21 +549,18 @@ public fun DualPaneScreen(
                 }
             }
         is DialogKind.ConfirmDelete ->
-            AlertDialog(
-                onDismissRequest = { dialog = null },
-                title = { Text(stringResource(R.string.action_delete)) },
-                text = { Text(stringResource(R.string.confirm_delete, d.entries.size)) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            dialog = null
-                            scope.launch { controller.delete(d.entries, d.pane) }
-                        },
-                    ) { Text(stringResource(R.string.action_delete)) }
+            DeleteConfirmDialog(
+                count = d.entries.size,
+                canTrash = d.canTrash,
+                onTrash = {
+                    dialog = null
+                    scope.launch { controller.moveToTrash(d.entries, d.pane, Trash.dir(), uiStore) }
                 },
-                dismissButton = {
-                    TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.action_cancel)) }
+                onDelete = {
+                    dialog = null
+                    scope.launch { controller.delete(d.entries, d.pane) }
                 },
+                onDismiss = { dialog = null },
             )
         is DialogKind.Compress ->
             TextInputDialog(
@@ -544,6 +577,23 @@ public fun DualPaneScreen(
             PropertiesDialog(
                 entry = d.entry,
                 registry = registry,
+                onDismiss = { dialog = null },
+            )
+        is DialogKind.AddBookmark ->
+            BookmarkDialog(
+                initialName = d.initialName,
+                knownGroups = uiStore.bookmarkGroups(),
+                onConfirm = { name, group ->
+                    dialog = null
+                    val added = uiStore.addBookmark(name, d.path, group)
+                    val message =
+                        if (added) {
+                            context.getString(R.string.bookmark_added)
+                        } else {
+                            context.getString(R.string.bookmark_exists)
+                        }
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                },
                 onDismiss = { dialog = null },
             )
         null -> Unit
@@ -623,10 +673,14 @@ private fun CreateDialog(
     )
 }
 
-/** 条目操作菜单（观察规格 2026-10-10-file-manager.md 第 3 节，文案为自有实现） */
+/**
+ * 条目操作菜单（观察规格 2026-10-10-file-manager.md 第 3 节，文案为自有实现）。
+ * 0.2.0-alpha08：回收站内部条目首项提供「恢复」。
+ */
 @Composable
 private fun EntryActionSheet(
     target: ActionTarget,
+    inTrash: Boolean,
     onDismiss: () -> Unit,
     onAction: (String) -> Unit,
 ) {
@@ -640,31 +694,32 @@ private fun EntryActionSheet(
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
-        listOf(
-            "multi_select" to stringResource(R.string.action_multi_select),
-            "copy" to stringResource(R.string.action_copy),
-            "move" to stringResource(R.string.action_move),
-            "copy_to_other" to stringResource(R.string.action_copy_to_other_pane),
-            "move_to_other" to stringResource(R.string.action_move_to_other_pane),
-            "rename" to stringResource(R.string.action_rename),
-            "delete" to stringResource(R.string.action_delete),
-            "compress" to stringResource(R.string.action_compress_to_zip),
-            "extract" to stringResource(R.string.action_extract_here),
-            "edit" to stringResource(R.string.action_edit_text),
-            "open_with" to stringResource(R.string.action_open_with_system),
-            "properties" to stringResource(R.string.action_properties),
-        ).forEach { (id, label) ->
-            val enabled =
-                when (id) {
-                    "extract" -> isZip
-                    "copy_to_other", "move_to_other" -> !isZip
-                    "open_with" -> !isZip && OpenWith.isLocalPath(target.entry.path)
-                    else -> true
-                }
+        listOfNotNull(
+            "restore" to stringResource(R.string.action_restore) to inTrash,
+            "multi_select" to stringResource(R.string.action_multi_select) to true,
+            "copy" to stringResource(R.string.action_copy) to !inTrash,
+            "move" to stringResource(R.string.action_move) to !inTrash,
+            "copy_to_other" to stringResource(R.string.action_copy_to_other_pane) to (!inTrash && !isZip),
+            "move_to_other" to stringResource(R.string.action_move_to_other_pane) to (!inTrash && !isZip),
+            "rename" to stringResource(R.string.action_rename) to !inTrash,
+            "delete" to stringResource(R.string.action_delete) to true,
+            "compress" to stringResource(R.string.action_compress_to_zip) to (!inTrash && !isZip),
+            "extract" to stringResource(R.string.action_extract_here) to (!inTrash && isZip),
+            "edit" to stringResource(R.string.action_edit_text) to !isZip,
+            "open_with" to stringResource(R.string.action_open_with_system) to (!inTrash && !isZip),
+            "properties" to stringResource(R.string.action_properties) to true,
+        ).forEach { (pair, enabled) ->
+            val (id, label) = pair
+            val clickable =
+                enabled &&
+                    when (id) {
+                        "open_with" -> OpenWith.isLocalPath(target.entry.path)
+                        else -> true
+                    }
             DropdownMenuItem(
                 text = { Text(label, color = MaterialTheme.colorScheme.onSurface) },
                 onClick = { onAction(id) },
-                enabled = enabled,
+                enabled = clickable,
             )
         }
         TextButton(onClick = onDismiss, modifier = Modifier.padding(start = 12.dp)) {
@@ -698,6 +753,107 @@ private fun TextInputDialog(
                 onClick = { if (text.isNotBlank()) onConfirm(text.trim()) },
                 enabled = text.isNotBlank(),
             ) { Text(stringResource(R.string.action_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/**
+ * 删除确认（0.2.0-alpha08）：可入回收站时提供「移入回收站」（默认）与「直接删除」并列；
+ * 回收站内/压缩包内仅永久删除。
+ */
+@Composable
+private fun DeleteConfirmDialog(
+    count: Int,
+    canTrash: Boolean,
+    onTrash: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_delete)) },
+        text = {
+            Text(
+                if (canTrash) {
+                    stringResource(R.string.confirm_trash, count)
+                } else {
+                    stringResource(R.string.confirm_delete, count)
+                },
+            )
+        },
+        confirmButton = {
+            Row {
+                if (canTrash) {
+                    TextButton(onClick = onDelete) {
+                        Text(
+                            stringResource(R.string.action_delete_permanent),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    TextButton(onClick = onTrash) {
+                        Text(stringResource(R.string.action_move_to_trash))
+                    }
+                } else {
+                    TextButton(onClick = onDelete) {
+                        Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/**
+ * 添加书签对话框（0.2.0-alpha08 分组支持）：名称预填 + 可选分组输入（点击已有分组快速填入）。
+ */
+@Composable
+private fun BookmarkDialog(
+    initialName: String,
+    knownGroups: List<String>,
+    onConfirm: (name: String, group: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var group by remember { mutableStateOf("") }
+    val valid = name.isNotBlank()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_add_bookmark)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.bookmark_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = group,
+                    onValueChange = { group = it },
+                    label = { Text(stringResource(R.string.bookmark_group)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (knownGroups.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.bookmark_group_existing) + knownGroups.joinToString(" / "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(name.trim(), group.trim()) }, enabled = valid) {
+                Text(stringResource(R.string.action_ok))
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -52,8 +53,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neomanager.engine.core.vfs.VfsUri
 import com.neomanager.ui.R
+import com.neomanager.ui.bookmark.BookmarkItem
 import com.neomanager.ui.bookmark.UiStateStore
 import com.neomanager.ui.file.FilePaneState
+import com.neomanager.ui.trash.Trash
 import java.io.File
 
 /** 抽屉历史展示条数上限（存储仍为全量 [UiStateStore.HISTORY_LIMIT] 条） */
@@ -133,24 +136,26 @@ internal fun resolvePathInput(raw: String): String? {
 }
 
 /**
- * MT 风格侧边抽屉脚手架（规格第 1/7 节）：存储位置 + 书签 + 历史记录，包裹主界面 [content]。
+ * MT 风格侧边抽屉脚手架（规格第 1/7 节）：存储位置 + 回收站 + 书签（分组） + 历史记录，包裹主界面 [content]。
  *
- * 跳转作用于「活动窗口」[activeState]；书签支持添加（标题栏 +）/ 删除（行尾按钮），
- * 历史记录由主屏在导航时写入 [store]，可一键清除；全部数据应用内私有持久化（无网络）。
+ * 跳转作用于调用方指定的目标窗口；书签支持添加（标题栏 +，弹分组对话框）/ 删除（行尾按钮），
+ * 回收站入口跳转到约定回收站目录；历史记录由主屏在导航时写入 [store]，可一键清除；
+ * 全部数据应用内私有持久化（无网络）。
  */
 @Composable
 public fun NeoDrawerScaffold(
     drawerState: DrawerState,
-    activeState: FilePaneState,
     store: UiStateStore,
     onNavigate: (String) -> Unit,
+    onOpenTrash: () -> Unit,
+    onAddBookmark: () -> Unit,
     onOpenSettings: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val open = drawerState.targetValue == DrawerValue.Open
     // 每次打开抽屉重算存储列表与历史（反映外置卷插拔与最新浏览）
     val locations = remember(open) { storageLocations() }
-    var bookmarks by remember(open) { mutableStateOf(store.bookmarks()) }
+    var bookmarks by remember(open) { mutableStateOf(store.bookmarksGrouped()) }
     var history by remember(open) { mutableStateOf(store.history()) }
 
     ModalNavigationDrawer(
@@ -169,6 +174,15 @@ public fun NeoDrawerScaffold(
                         }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    DrawerSectionTitle(stringResource(R.string.drawer_tools))
+                    DrawerRow(
+                        icon = Icons.Filled.DeleteOutline,
+                        title = stringResource(R.string.trash_entry),
+                        subtitle = displayPath(Trash.dirUri()),
+                    ) {
+                        onOpenTrash()
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -177,11 +191,7 @@ public fun NeoDrawerScaffold(
                             stringResource(R.string.drawer_bookmarks),
                             modifier = Modifier.weight(1f),
                         )
-                        IconButton(onClick = {
-                            if (store.addBookmark(displayNameFor(activeState.path), activeState.path)) {
-                                bookmarks = store.bookmarks()
-                            }
-                        }) {
+                        IconButton(onClick = onAddBookmark) {
                             Icon(
                                 Icons.Filled.Add,
                                 contentDescription = stringResource(R.string.action_add_bookmark),
@@ -192,29 +202,15 @@ public fun NeoDrawerScaffold(
                     if (bookmarks.isEmpty()) {
                         DrawerHint(stringResource(R.string.drawer_empty_bookmarks))
                     }
-                    bookmarks.forEach { (name, path) ->
-                        DrawerRow(
-                            icon = Icons.Filled.Folder,
-                            title = name,
-                            subtitle = displayPath(path),
-                            trailing = {
-                                IconButton(onClick = {
-                                    if (store.removeBookmark(path)) {
-                                        bookmarks = store.bookmarks()
-                                    }
-                                }) {
-                                    Icon(
-                                        Icons.Filled.Delete,
-                                        contentDescription = stringResource(R.string.action_delete),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            },
-                        ) {
-                            onNavigate(path)
-                        }
-                    }
+                    BookmarkList(
+                        bookmarks = bookmarks,
+                        onNavigate = onNavigate,
+                        onRemove = { path ->
+                            if (store.removeBookmark(path)) {
+                                bookmarks = store.bookmarksGrouped()
+                            }
+                        },
+                    )
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
@@ -275,19 +271,19 @@ private fun DrawerSectionTitle(
 }
 
 /**
- * 快速面板（0.2.0-alpha07）：右下角 FAB 点击/上滑弹出的书签 + 历史记录底部弹层（MT 惯例）。
+ * 快速面板（0.2.0-alpha07，0.2.0-alpha08 分组展示）：右下角 FAB 点击/上滑弹出的书签 + 历史记录底部弹层（MT 惯例）。
  *
- * 与侧边抽屉共享 [UiStateStore] 数据；跳转作用于「活动窗口」。
+ * 与侧边抽屉共享 [UiStateStore] 数据；跳转作用于「活动窗口」；添加书签走 [onAddBookmark] 分组对话框。
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 public fun NeoQuickSheet(
-    activeState: FilePaneState,
     store: UiStateStore,
     onNavigate: (String) -> Unit,
+    onAddBookmark: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var bookmarks by remember { mutableStateOf(store.bookmarks()) }
+    var bookmarks by remember { mutableStateOf(store.bookmarksGrouped()) }
     var history by remember { mutableStateOf(store.history()) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -299,11 +295,7 @@ public fun NeoQuickSheet(
                     stringResource(R.string.drawer_bookmarks),
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = {
-                    if (store.addBookmark(displayNameFor(activeState.path), activeState.path)) {
-                        bookmarks = store.bookmarks()
-                    }
-                }) {
+                IconButton(onClick = onAddBookmark) {
                     Icon(
                         Icons.Filled.Add,
                         contentDescription = stringResource(R.string.action_add_bookmark),
@@ -314,29 +306,15 @@ public fun NeoQuickSheet(
             if (bookmarks.isEmpty()) {
                 DrawerHint(stringResource(R.string.drawer_empty_bookmarks))
             }
-            bookmarks.forEach { (name, path) ->
-                DrawerRow(
-                    icon = Icons.Filled.Star,
-                    title = name,
-                    subtitle = displayPath(path),
-                    trailing = {
-                        IconButton(onClick = {
-                            if (store.removeBookmark(path)) {
-                                bookmarks = store.bookmarks()
-                            }
-                        }) {
-                            Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = stringResource(R.string.action_delete),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    },
-                ) {
-                    onNavigate(path)
-                }
-            }
+            BookmarkList(
+                bookmarks = bookmarks,
+                onNavigate = onNavigate,
+                onRemove = { path ->
+                    if (store.removeBookmark(path)) {
+                        bookmarks = store.bookmarksGrouped()
+                    }
+                },
+            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp),
@@ -383,6 +361,47 @@ private fun DrawerHint(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
+}
+
+/**
+ * 书签列表（0.2.0-alpha08 分组支持）：未分组条目平铺在前，
+ * 随后按分组名（保持插入顺序）分组展示，组间以小号主色标题分隔。
+ */
+@Composable
+private fun BookmarkList(
+    bookmarks: List<BookmarkItem>,
+    onNavigate: (String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    var currentGroup: String? = null
+    bookmarks.forEach { item ->
+        if (item.group.isNotEmpty() && item.group != currentGroup) {
+            currentGroup = item.group
+            Text(
+                text = item.group,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 28.dp, top = 6.dp, bottom = 2.dp),
+            )
+        }
+        DrawerRow(
+            icon = Icons.Filled.Star,
+            title = item.name,
+            subtitle = displayPath(item.path),
+            trailing = {
+                IconButton(onClick = { onRemove(item.path) }) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.action_delete),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            },
+        ) {
+            onNavigate(item.path)
+        }
+    }
 }
 
 /**

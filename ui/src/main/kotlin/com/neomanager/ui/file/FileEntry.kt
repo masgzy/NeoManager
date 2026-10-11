@@ -15,6 +15,7 @@ package com.neomanager.ui.file
  * @property isDirectory 是否目录
  * @property sizeBytes 文件字节数（目录恒为 0，目录大小不递归统计）
  * @property lastModified 最后修改时间（epoch 毫秒；未知为 0）
+ * @property permissions 权限串（如 `drwxrwx--x`；后端无法提供时为 null，0.2.0-alpha08）
  */
 public data class FileEntry(
     val name: String,
@@ -22,4 +23,5 @@ public data class FileEntry(
     val isDirectory: Boolean,
     val sizeBytes: Long = 0L,
     val lastModified: Long = 0L,
+    val permissions: String? = null,
 )

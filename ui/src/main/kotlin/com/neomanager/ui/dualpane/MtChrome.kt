@@ -77,7 +77,7 @@ private fun disabledIcon(): Color = MaterialTheme.colorScheme.onSurface.copy(alp
 private fun barIcon(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
 /**
- * 共享顶栏（0.2.0-alpha07 Material You 重塑）。
+ * 共享顶栏（0.2.0-alpha08：新增单栏/双栏切换）。
  *
  * 四种形态互斥切换（均作用于活动窗口 [state]）：
  * - 常规：汉堡（开侧边抽屉） + 大号路径（点击进入路径跳转） + 统计副标题 + 溢出菜单；
@@ -91,12 +91,14 @@ private fun barIcon(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 public fun MtTopBar(
     state: FilePaneState,
     modifier: Modifier = Modifier,
+    singlePane: Boolean,
     onOpenDrawer: () -> Unit,
     onNavigatePath: (String) -> Unit,
     onAddBookmark: () -> Unit,
     onSetHome: () -> Unit,
     onSort: () -> Unit,
     onSwapWindows: () -> Unit,
+    onToggleSinglePane: () -> Unit,
     onHideSelected: () -> Unit,
     onToggleSystemHidden: () -> Unit,
     onToggleManualHidden: () -> Unit,
@@ -125,6 +127,8 @@ public fun MtTopBar(
                         onAddBookmark = onAddBookmark,
                         onSetHome = onSetHome,
                         onSwapWindows = onSwapWindows,
+                        singlePane = singlePane,
+                        onToggleSinglePane = onToggleSinglePane,
                         onHideSelected = onHideSelected,
                         onToggleSystemHidden = onToggleSystemHidden,
                         onToggleManualHidden = onToggleManualHidden,
@@ -234,6 +238,8 @@ private fun PathBar(
     onAddBookmark: () -> Unit,
     onSetHome: () -> Unit,
     onSwapWindows: () -> Unit,
+    singlePane: Boolean,
+    onToggleSinglePane: () -> Unit,
     onHideSelected: () -> Unit,
     onToggleSystemHidden: () -> Unit,
     onToggleManualHidden: () -> Unit,
@@ -356,12 +362,22 @@ private fun PathBar(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_swap_windows)) },
+                    text = { Text(stringResource(R.string.action_single_pane)) },
+                    trailingIcon = { MenuCheck(singlePane) },
                     onClick = {
                         overflowOpen = false
-                        onSwapWindows()
+                        onToggleSinglePane()
                     },
                 )
+                if (!singlePane) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_swap_windows)) },
+                        onClick = {
+                            overflowOpen = false
+                            onSwapWindows()
+                        },
+                    )
+                }
             }
         }
     }
@@ -514,13 +530,14 @@ private fun gigabytes(bytes: Long): String {
 /**
  * 共享底栏：后退 / 前进 / 添加 / 同步对侧 / 上级（作用于活动窗口 [state]）。
  *
- * 0.2.0-alpha07：五键全宽均匀分布（MT 惯例的居中观感）；「添加」菜单含新建与粘贴。
+ * 0.2.0-alpha08：单栏模式下隐藏「同步对侧」（无对侧可见）；「添加」菜单含新建与粘贴。
  */
 @Composable
 public fun MtBottomBar(
     state: FilePaneState,
     modifier: Modifier = Modifier,
     pasteEnabled: Boolean,
+    singlePane: Boolean,
     onCreate: () -> Unit,
     onPaste: () -> Unit,
     onSync: () -> Unit,
@@ -573,12 +590,14 @@ public fun MtBottomBar(
                     )
                 }
             }
-            IconButton(onClick = onSync) {
-                Icon(
-                    Icons.Filled.SwapHoriz,
-                    contentDescription = stringResource(R.string.action_sync_windows),
-                    tint = barIcon(),
-                )
+            if (!singlePane) {
+                IconButton(onClick = onSync) {
+                    Icon(
+                        Icons.Filled.SwapHoriz,
+                        contentDescription = stringResource(R.string.action_sync_windows),
+                        tint = barIcon(),
+                    )
+                }
             }
             IconButton(onClick = state::up, enabled = state.canGoUp) {
                 Icon(

@@ -46,4 +46,5 @@ private fun com.neomanager.engine.core.vfs.VfsEntry.toUiEntry(): FileEntry =
         isDirectory = isDirectory,
         sizeBytes = sizeBytes,
         lastModified = lastModified,
+        permissions = permissions,
     )

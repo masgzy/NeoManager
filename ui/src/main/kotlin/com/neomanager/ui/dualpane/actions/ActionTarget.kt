@@ -28,10 +28,15 @@ public sealed class DialogKind {
         val entry: FileEntry,
     ) : DialogKind()
 
-    /** 删除确认（pane = 删除后需刷新的面板） */
+    /**
+     * 删除确认（pane = 删除后需刷新的面板）。
+     * [canTrash] 为 true 时提供「移入回收站」默认动作与「直接删除」并列；
+     * 回收站内部或压缩包内条目只能永久删除。
+     */
     public data class ConfirmDelete(
         val entries: List<FileEntry>,
         val pane: FilePaneState,
+        val canTrash: Boolean = false,
     ) : DialogKind()
 
     /** 压缩为 zip */
@@ -42,6 +47,14 @@ public sealed class DialogKind {
     /** 属性查看 */
     public data class Properties(
         val entry: FileEntry,
+    ) : DialogKind()
+
+    /**
+     * 添加书签（0.2.0-alpha08 支持分组）：预填展示名，分组可留空。
+     */
+    public data class AddBookmark(
+        val path: String,
+        val initialName: String,
     ) : DialogKind()
 }
 
