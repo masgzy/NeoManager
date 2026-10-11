@@ -20,8 +20,11 @@ local.properties
 out/
 
 # 签名文件（任何密钥严禁入库）
+# 例外：keystore/debug.keystore 为共享调试密钥（口令为业界惯例公开值 android），
+# 入库以保证本地与 CI 构建签名一致、支持覆盖安装；正式发布密钥绝不入库
 *.jks
 *.keystore
+!keystore/debug.keystore
 
 # 原生构建
 .externalNativeBuild/
