@@ -506,9 +506,13 @@ private fun TextInputDialog(
 
 private val ZIP_EXTS = setOf("zip", "jar", "apk", "apks", "xapk", "apkm", "tar", "gz", "xz", "zst", "bz2", "7z", "rar")
 
+/** 「所有文件访问」状态（防御性包裹：个别框架/ROM 下系统接口可能异常，失败按未授权处理） */
 private fun checkAllFilesAccess(): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
-        Environment.isExternalStorageManager()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        true
+    } else {
+        runCatching { Environment.isExternalStorageManager() }.getOrDefault(false)
+    }
 
 /**
  * 「所有文件访问」授权引导横幅（Android 11+ 显示）。

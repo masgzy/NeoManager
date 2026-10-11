@@ -63,10 +63,12 @@
 
         <!--
           Shizuku 服务提供器：Shizuku 经此拉起本应用的用户服务（NeoFileService）。
+          注意：shizuku 13.1.5 的 Maven 坐标是 dev.rikka.shizuku，但 Java 包名是
+          rikka.shizuku（坐标组名 ≠ 包名），类名写错将导致启动期 ClassNotFoundException 闪退。
           未安装 Shizuku 时该 provider 不影响任何功能。
         -->
         <provider
-            android:name="dev.rikka.shizuku.ShizukuProvider"
+            android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
             android:multiprocess="false"
             android:enabled="true"

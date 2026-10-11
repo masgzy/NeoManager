@@ -3,6 +3,28 @@
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式；
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)（alpha 阶段允许破坏性变更）。
 
+## [0.2.0-alpha04] - 2026-10-11 · 闪退根因修复（ShizukuProvider 类名）
+
+用户 logcat 定位到 alpha02/03 闪退的唯一根因，一并解决跨构建签名不一致导致的覆盖安装失败。
+
+### 修复
+
+- **启动即闪退（全部用户、每次必现）**：app 清单将 ShizukuProvider 注册为
+  `dev.rikka.shizuku.ShizukuProvider`，但 shizuku 13.1.5 构件内真实类名是
+  `rikka.shizuku.ShizukuProvider`（Maven 坐标组名 ≠ Java 包名）。系统在
+  Application 之前初始化 Provider，ClassNotFoundException 直接杀进程——
+  这也是 alpha03 内置崩溃日志"静默失效"的原因（捕获器尚未安装进程已死）。
+  现已更正类名；该问题由新增的 Robolectric 启动冒烟测试拦截（见下）
+- **覆盖安装失败**：CI 与本地构建各自生成 debug 签名，相互覆盖安装必然失败。
+  现提交固定 debug 密钥（keystore/debug.keystore，调试惯例公开口令），
+  此后所有构建签名一致，可直接覆盖升级
+
+### 新增
+
+- **启动冒烟测试**（Robolectric，JVM 真实框架）：启动 MainActivity 走完
+  Provider 初始化/主题装载/Compose 首帧，任一环异常即以真实堆栈失败。
+  纳入 CI 后可在发布前拦截"启动闪退"类回归，不再依赖真机手测
+
 ## [0.2.0-alpha03] - 2026-10-11 · 闪退排查与首帧修复
 
 针对 alpha02 真机闪退反馈的快速修复版，同时内置本地崩溃日志捕获以便精确定位。
