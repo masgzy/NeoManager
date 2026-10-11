@@ -31,6 +31,7 @@ import androidx.navigation.navArgument
 import com.neomanager.engine.core.vfs.VfsRegistry
 import com.neomanager.ui.dualpane.DualPaneScreen
 import com.neomanager.ui.editor.TextEditorScreen
+import com.neomanager.ui.engine.DynamicElevatedVfs
 import com.neomanager.ui.engine.EngineBridge
 import com.neomanager.ui.engine.LocalEngineBridge
 import com.neomanager.ui.settings.SettingsScreen
@@ -135,7 +136,7 @@ public fun NeoApp(
                 ) { entry ->
                     val path = entry.arguments?.getString(Routes.EDITOR_ARG_PATH).orEmpty()
                     val bridge = LocalEngineBridge.current
-                    val registry = remember(bridge) { VfsRegistry(bridge.elevatedVfs()) }
+                    val registry = remember(bridge) { VfsRegistry(DynamicElevatedVfs { bridge.elevatedVfs() }) }
                     TextEditorScreen(
                         path = android.net.Uri.decode(path),
                         registry = registry,
@@ -156,7 +157,7 @@ public fun NeoApp(
                 ) { entry ->
                     val path = entry.arguments?.getString(Routes.EDITOR_ARG_PATH).orEmpty()
                     val bridge = LocalEngineBridge.current
-                    val registry = remember(bridge) { VfsRegistry(bridge.elevatedVfs()) }
+                    val registry = remember(bridge) { VfsRegistry(DynamicElevatedVfs { bridge.elevatedVfs() }) }
                     ImageViewerScreen(
                         path = android.net.Uri.decode(path),
                         registry = registry,

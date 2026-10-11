@@ -116,4 +116,24 @@
     <!-- 路径跳转（0.2.0-alpha06） -->
     <string name="path_jump_hint">输入路径跳转（支持 file:// 或绝对路径）</string>
     <string name="path_jump_invalid">无效路径</string>
+
+    <!-- Material You 重塑与新建/隐藏（0.2.0-alpha07） -->
+    <string name="action_new">新建</string>
+    <string name="action_new_file">文件</string>
+    <string name="show_system_hidden">显示系统隐藏</string>
+    <string name="show_manual_hidden">显示手动隐藏</string>
+    <string name="hide_selected">隐藏所选文件</string>
+    <string name="hidden_selected_done">已隐藏 %1$d 项（⋮ 菜单可开启「显示手动隐藏」）</string>
+    <string name="quick_sheet_open">书签与历史</string>
+    <string name="drawer_empty_history">暂无历史记录</string>
+
+    <!-- 首次启动手势引导 -->
+    <string name="tips_title">使用提示</string>
+    <string name="tips_quick_sheet">点击或上滑右下角按钮，打开书签与历史记录</string>
+    <string name="tips_pull_refresh">在文件列表下拉即可刷新当前目录</string>
+    <string name="tips_long_press">长按文件或文件夹，查看全部操作（复制/移动/压缩/属性…）</string>
+    <string name="tips_path_jump">点击顶部路径，输入地址即可直接跳转</string>
+    <string name="tips_drawer">左侧抽屉集中了存储位置、书签与历史</string>
+    <string name="tips_hidden_files">隐藏文件默认显示；⋮ 菜单可分别控制系统隐藏与手动隐藏</string>
+    <string name="tips_got_it">我知道了</string>
 </resources>

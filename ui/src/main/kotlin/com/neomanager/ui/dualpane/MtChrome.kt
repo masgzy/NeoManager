@@ -65,27 +65,27 @@ import androidx.compose.ui.unit.sp
 import com.neomanager.engine.core.vfs.VfsUri
 import com.neomanager.ui.R
 import com.neomanager.ui.file.FilePaneState
-import com.neomanager.ui.theme.MtChrome
-import com.neomanager.ui.theme.MtChromeOn
-import com.neomanager.ui.theme.MtChromeOnDim
-import com.neomanager.ui.theme.MtChromeUnderline
 import kotlinx.coroutines.delay
 import java.util.Locale
 
-/** 底栏图标色（白底上的炭灰） */
-private val MtBottomIcon = Color(0xFF3B3B3B)
+/** 底栏禁用图标色（M3 惯例：onSurface 38% 透明度） */
+@Composable
+private fun disabledIcon(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
-/** 底栏禁用图标色 */
-private val MtBottomIconDim = Color(0xFFBDBDBD)
+/** 底栏可用图标色 */
+@Composable
+private fun barIcon(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
 /**
- * MT 风格共享顶栏（0.2.0-alpha06）。
+ * 共享顶栏（0.2.0-alpha07 Material You 重塑）。
  *
  * 四种形态互斥切换（均作用于活动窗口 [state]）：
  * - 常规：汉堡（开侧边抽屉） + 大号路径（点击进入路径跳转） + 统计副标题 + 溢出菜单；
  * - 路径输入：编辑图标 + 下划线输入框 + 确认/关闭；
  * - 搜索：搜索图标 + 下划线输入框 + 关闭；
  * - 多选：关闭 + 已选计数 + 全选 + 复制/剪切/删除。
+ *
+ * 路径展示为净化后的可读形式（无 file:// 前缀，见 [displayPath]）。
  */
 @Composable
 public fun MtTopBar(
@@ -97,10 +97,13 @@ public fun MtTopBar(
     onSetHome: () -> Unit,
     onSort: () -> Unit,
     onSwapWindows: () -> Unit,
+    onHideSelected: () -> Unit,
+    onToggleSystemHidden: () -> Unit,
+    onToggleManualHidden: () -> Unit,
     onSelectionAction: (String) -> Unit,
 ) {
     var pathEditing by remember { mutableStateOf(false) }
-    Column(modifier = modifier.background(MtChrome)) {
+    Column(modifier = modifier.background(MaterialTheme.colorScheme.surface)) {
         Column(Modifier.statusBarsPadding()) {
             when {
                 state.selectionMode -> SelectionBar(state = state, onAction = onSelectionAction)
@@ -122,6 +125,9 @@ public fun MtTopBar(
                         onAddBookmark = onAddBookmark,
                         onSetHome = onSetHome,
                         onSwapWindows = onSwapWindows,
+                        onHideSelected = onHideSelected,
+                        onToggleSystemHidden = onToggleSystemHidden,
+                        onToggleManualHidden = onToggleManualHidden,
                     )
             }
         }
@@ -155,7 +161,7 @@ private fun PathInputBar(
         Icon(
             imageVector = Icons.Filled.Edit,
             contentDescription = null,
-            tint = MtChromeOnDim,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp).size(22.dp),
         )
         Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -163,7 +169,7 @@ private fun PathInputBar(
                 Text(
                     text = stringResource(R.string.path_jump_hint),
                     style = TextStyle(fontSize = 15.sp),
-                    color = MtChromeOnDim,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
             }
@@ -175,7 +181,7 @@ private fun PathInputBar(
                         invalid = false
                     },
                     singleLine = true,
-                    textStyle = TextStyle(fontSize = 15.sp, color = MtChromeOn),
+                    textStyle = TextStyle(fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
@@ -185,7 +191,7 @@ private fun PathInputBar(
                     Modifier
                         .fillMaxWidth()
                         .height(2.dp)
-                        .background(if (invalid) InvalidUnderline else MtChromeUnderline),
+                        .background(if (invalid) InvalidUnderline else MaterialTheme.colorScheme.primary),
                 )
                 if (invalid) {
                     Text(
@@ -199,15 +205,23 @@ private fun PathInputBar(
             }
         }
         IconButton(onClick = ::submit) {
-            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.action_ok), tint = MtChromeOn)
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = stringResource(R.string.action_ok),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
         IconButton(onClick = onClose) {
-            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_cancel), tint = MtChromeOn)
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = stringResource(R.string.action_cancel),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
 
-/** 路径输入非法时的下划线/提示色 */
+/** 路径输入非法时的下划线/提示色（错误语义，M3 error 色太刺眼时保持独立定义） */
 private val InvalidUnderline = Color(0xFFE57373)
 
 /** 常规形态：汉堡（抽屉） + 可点击路径/统计 + 溢出菜单 */
@@ -220,6 +234,9 @@ private fun PathBar(
     onAddBookmark: () -> Unit,
     onSetHome: () -> Unit,
     onSwapWindows: () -> Unit,
+    onHideSelected: () -> Unit,
+    onToggleSystemHidden: () -> Unit,
+    onToggleManualHidden: () -> Unit,
 ) {
     var overflowOpen by remember { mutableStateOf(false) }
     Row(
@@ -227,7 +244,11 @@ private fun PathBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onOpenDrawer) {
-            Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.drawer_open), tint = MtChromeOn)
+            Icon(
+                Icons.Filled.Menu,
+                contentDescription = stringResource(R.string.drawer_open),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Column(
             modifier =
@@ -238,23 +259,23 @@ private fun PathBar(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = state.path,
+                text = displayPath(state.path),
                 style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                color = MtChromeOn,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = paneSubtitle(state),
                 style = TextStyle(fontSize = 12.sp),
-                color = MtChromeOnDim,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         Box {
             IconButton(onClick = { overflowOpen = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = null, tint = MtChromeOn)
+                Icon(Icons.Filled.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
             }
             DropdownMenu(expanded = overflowOpen, onDismissRequest = { overflowOpen = false }) {
                 DropdownMenuItem(
@@ -279,6 +300,48 @@ private fun PathBar(
                     },
                 )
                 DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_sort)) },
+                    onClick = {
+                        overflowOpen = false
+                        onSort()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.show_system_hidden)) },
+                    trailingIcon = { MenuCheck(state.showHidden) },
+                    onClick = {
+                        overflowOpen = false
+                        onToggleSystemHidden()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.show_manual_hidden)) },
+                    trailingIcon = { MenuCheck(state.showManualHidden) },
+                    onClick = {
+                        overflowOpen = false
+                        onToggleManualHidden()
+                    },
+                )
+                val canHide = state.selectionMode && state.selectedPaths.isNotEmpty()
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(R.string.hide_selected),
+                            color =
+                                if (canHide) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                },
+                        )
+                    },
+                    onClick = {
+                        overflowOpen = false
+                        if (canHide) onHideSelected()
+                    },
+                    enabled = canHide,
+                )
+                DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_add_bookmark)) },
                     onClick = {
                         overflowOpen = false
@@ -293,20 +356,6 @@ private fun PathBar(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_sort)) },
-                    onClick = {
-                        overflowOpen = false
-                        onSort()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.show_hidden_files)) },
-                    onClick = {
-                        overflowOpen = false
-                        state.showHidden = !state.showHidden
-                    },
-                )
-                DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_swap_windows)) },
                     onClick = {
                         overflowOpen = false
@@ -315,6 +364,19 @@ private fun PathBar(
                 )
             }
         }
+    }
+}
+
+/** 菜单项尾缀勾选标记 */
+@Composable
+private fun MenuCheck(checked: Boolean) {
+    if (checked) {
+        Icon(
+            Icons.Filled.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -332,7 +394,7 @@ private fun SearchBar(state: FilePaneState) {
         Icon(
             imageVector = Icons.Filled.Search,
             contentDescription = null,
-            tint = MtChromeOnDim,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp).size(22.dp),
         )
         Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -340,7 +402,7 @@ private fun SearchBar(state: FilePaneState) {
                 Text(
                     text = stringResource(R.string.search_hint),
                     style = TextStyle(fontSize = 15.sp),
-                    color = MtChromeOnDim,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
             }
@@ -349,7 +411,7 @@ private fun SearchBar(state: FilePaneState) {
                     value = state.searchQuery,
                     onValueChange = { state.searchQuery = it },
                     singleLine = true,
-                    textStyle = TextStyle(fontSize = 15.sp, color = MtChromeOn),
+                    textStyle = TextStyle(fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -357,12 +419,12 @@ private fun SearchBar(state: FilePaneState) {
                     Modifier
                         .fillMaxWidth()
                         .height(2.dp)
-                        .background(MtChromeUnderline),
+                        .background(MaterialTheme.colorScheme.primary),
                 )
             }
         }
         IconButton(onClick = state::closeSearch) {
-            Icon(Icons.Filled.Close, contentDescription = null, tint = MtChromeOn)
+            Icon(Icons.Filled.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -378,39 +440,39 @@ private fun SelectionBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = state::exitSelectionMode) {
-            Icon(Icons.Filled.Close, contentDescription = null, tint = MtChromeOn)
+            Icon(Icons.Filled.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
         }
         Text(
             text = stringResource(R.string.selection_count, state.selectedPaths.size),
             style = TextStyle(fontSize = 16.sp),
-            color = MtChromeOn,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         IconButton(onClick = state::selectAll) {
-            Icon(Icons.Filled.DoneAll, contentDescription = null, tint = MtChromeOn)
+            Icon(Icons.Filled.DoneAll, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
         }
         val enabled = state.selectedPaths.isNotEmpty()
         IconButton(onClick = { onAction("copy") }, enabled = enabled) {
             Icon(
                 Icons.Filled.ContentCopy,
                 contentDescription = null,
-                tint = if (enabled) MtChromeOn else MtChromeOnDim,
+                tint = if (enabled) MaterialTheme.colorScheme.onSurface else disabledIcon(),
             )
         }
         IconButton(onClick = { onAction("cut") }, enabled = enabled) {
             Icon(
                 Icons.Filled.ContentCut,
                 contentDescription = null,
-                tint = if (enabled) MtChromeOn else MtChromeOnDim,
+                tint = if (enabled) MaterialTheme.colorScheme.onSurface else disabledIcon(),
             )
         }
         IconButton(onClick = { onAction("delete") }, enabled = enabled) {
             Icon(
                 Icons.Filled.Delete,
                 contentDescription = null,
-                tint = if (enabled) MtChromeOn else MtChromeOnDim,
+                tint = if (enabled) MaterialTheme.colorScheme.error else disabledIcon(),
             )
         }
     }
@@ -450,14 +512,16 @@ private fun gigabytes(bytes: Long): String {
 }
 
 /**
- * MT 风格共享底栏：后退 / 前进 / 添加 / 同步对侧 / 上级（作用于活动窗口 [state]）。
+ * 共享底栏：后退 / 前进 / 添加 / 同步对侧 / 上级（作用于活动窗口 [state]）。
+ *
+ * 0.2.0-alpha07：五键全宽均匀分布（MT 惯例的居中观感）；「添加」菜单含新建与粘贴。
  */
 @Composable
 public fun MtBottomBar(
     state: FilePaneState,
     modifier: Modifier = Modifier,
     pasteEnabled: Boolean,
-    onNewFolder: () -> Unit,
+    onCreate: () -> Unit,
     onPaste: () -> Unit,
     onSync: () -> Unit,
 ) {
@@ -469,34 +533,34 @@ public fun MtBottomBar(
                 Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 12.dp),
+                    .navigationBarsPadding(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             IconButton(onClick = state::back) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.action_back),
-                    tint = MtBottomIcon,
+                    tint = barIcon(),
                 )
             }
             IconButton(onClick = state::forward, enabled = state.canGoForward) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = stringResource(R.string.action_forward),
-                    tint = if (state.canGoForward) MtBottomIcon else MtBottomIconDim,
+                    tint = if (state.canGoForward) barIcon() else disabledIcon(),
                 )
             }
             Box {
                 IconButton(onClick = { addOpen = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = null, tint = MtBottomIcon)
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = barIcon())
                 }
                 DropdownMenu(expanded = addOpen, onDismissRequest = { addOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_new_folder)) },
+                        text = { Text(stringResource(R.string.action_new)) },
                         onClick = {
                             addOpen = false
-                            onNewFolder()
+                            onCreate()
                         },
                     )
                     DropdownMenuItem(
@@ -513,14 +577,14 @@ public fun MtBottomBar(
                 Icon(
                     Icons.Filled.SwapHoriz,
                     contentDescription = stringResource(R.string.action_sync_windows),
-                    tint = MtBottomIcon,
+                    tint = barIcon(),
                 )
             }
             IconButton(onClick = state::up, enabled = state.canGoUp) {
                 Icon(
                     Icons.Filled.ArrowUpward,
                     contentDescription = stringResource(R.string.action_go_up),
-                    tint = if (state.canGoUp) MtBottomIcon else MtBottomIconDim,
+                    tint = if (state.canGoUp) barIcon() else disabledIcon(),
                 )
             }
         }

@@ -20,8 +20,8 @@ public data class SortDialogState(
 
 /** 各类对话框载荷 */
 public sealed class DialogKind {
-    /** 新建文件夹 */
-    public data object NewFolder : DialogKind()
+    /** 新建（MT 惯例：同一对话框内选择创建文件或文件夹） */
+    public data object Create : DialogKind()
 
     /** 重命名 */
     public data class Rename(

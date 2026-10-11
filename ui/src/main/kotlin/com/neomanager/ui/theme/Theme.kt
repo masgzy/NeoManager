@@ -4,66 +4,83 @@
  */
 package com.neomanager.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 /**
- * Neo 主题（MT 风格固定取色，0.2.0-alpha05 起）。
+ * Neo 主题（0.2.0-alpha07 起 Material You）。
  *
  * 取色策略：
- * - 不再使用 Material You 动态取色（壁纸取色会让界面偏离 MT 参考观感）；
- * - 浅色：白底黑字 + 炭黑顶栏 + 蓝色强调；深色：纯黑列表 + 亮字，同构映射。
- * 文件夹/文件图标的专属色（[MtFolderLight]/[MtFolderDark] 等）由列表组件直接引用。
+ * - Android 12+ 默认壁纸动态取色（dynamicLight/DarkColorScheme），跟随系统个性化；
+ * - Android 8-11 回退到以 Neo 蓝为种子的静态 M3 方案（[NeoColorSchemes]）；
+ * - 全部界面组件只引用 MaterialTheme.colorScheme 角色色，保证两套来源观感统一；
+ * - 文件类型图标保留语义恒定的分类色（[Color.kt]），不随壁纸漂移以便快速辨识。
  */
-private object MtColorSchemes {
+private object NeoColorSchemes {
     val Light =
         lightColorScheme(
-            primary = MtPrimaryLight,
-            onPrimary = Color(0xFFFFFFFF),
-            secondary = MtPrimaryLight,
-            background = MtSurfaceLight,
-            onBackground = MtOnSurfaceLight,
-            surface = MtSurfaceLight,
-            onSurface = MtOnSurfaceLight,
-            surfaceVariant = MtSurfaceVariantLight,
-            onSurfaceVariant = MtOnSurfaceVariantLight,
-            outline = MtOnSurfaceVariantLight,
-            outlineVariant = MtOutlineVariantLight,
+            primary = NeoPrimaryLight,
+            onPrimary = NeoOnPrimaryLight,
+            primaryContainer = NeoPrimaryContainerLight,
+            onPrimaryContainer = NeoOnPrimaryContainerLight,
+            secondaryContainer = NeoSecondaryContainerLight,
+            onSecondaryContainer = NeoOnSecondaryContainerLight,
+            background = NeoSurfaceLight,
+            onBackground = NeoOnSurfaceLight,
+            surface = NeoSurfaceLight,
+            onSurface = NeoOnSurfaceLight,
+            onSurfaceVariant = NeoOnSurfaceVariantLight,
+            outlineVariant = NeoOutlineVariantLight,
             error = Color(0xFFBA1A1A),
             onError = Color(0xFFFFFFFF),
         )
 
     val Dark =
         darkColorScheme(
-            primary = MtPrimaryDark,
-            onPrimary = Color(0xFF0B2A44),
-            secondary = MtPrimaryDark,
-            background = MtSurfaceDark,
-            onBackground = MtOnSurfaceDark,
-            surface = MtSurfaceDark,
-            onSurface = MtOnSurfaceDark,
-            surfaceVariant = MtSurfaceVariantDark,
-            onSurfaceVariant = MtOnSurfaceVariantDark,
-            outline = MtOnSurfaceVariantDark,
-            outlineVariant = MtOutlineVariantDark,
+            primary = NeoPrimaryDark,
+            onPrimary = NeoOnPrimaryDark,
+            primaryContainer = NeoPrimaryContainerDark,
+            onPrimaryContainer = NeoOnPrimaryContainerDark,
+            secondaryContainer = NeoSecondaryContainerDark,
+            onSecondaryContainer = NeoOnSecondaryContainerDark,
+            background = NeoSurfaceDark,
+            onBackground = NeoOnSurfaceDark,
+            surface = NeoSurfaceDark,
+            onSurface = NeoOnSurfaceDark,
+            onSurfaceVariant = NeoOnSurfaceVariantDark,
+            outlineVariant = NeoOutlineVariantDark,
             error = Color(0xFFFFB4AB),
             onError = Color(0xFF690005),
         )
 }
 
-/** 是否深色模式（跟随系统；MT 风格两套色板见 [MtColorSchemes]） */
+/** 是否深色模式（跟随系统；API 12+ 动态取色，低版本回退静态方案） */
 @Composable
 public fun NeoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val colorScheme =
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                val context = LocalContext.current
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            }
+            darkTheme -> NeoColorSchemes.Dark
+            else -> NeoColorSchemes.Light
+        }
     MaterialTheme(
-        colorScheme = if (darkTheme) MtColorSchemes.Dark else MtColorSchemes.Light,
+        colorScheme = colorScheme,
         typography = Typography(),
         content = content,
     )

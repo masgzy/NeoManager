@@ -118,4 +118,26 @@ public class UiStateStoreTest {
         store.setHomePath(null)
         assertNull(store.homePath())
     }
+
+    // -------- UiStateStore：手动隐藏（0.2.0-alpha07） --------
+
+    @Test
+    public fun hiddenPaths_addRemove_withIdempotence() {
+        val store = newStore()
+        assertTrue(store.hiddenPaths().isEmpty())
+        assertTrue(store.hidePath("file:///storage/emulated/0/.secret"))
+        assertFalse("重复隐藏应幂等", store.hidePath("file:///storage/emulated/0/.secret"))
+        assertEquals(setOf("file:///storage/emulated/0/.secret"), store.hiddenPaths())
+        assertTrue(store.unhidePath("file:///storage/emulated/0/.secret"))
+        assertFalse("解除不存在的隐藏应返回 false", store.unhidePath("file:///x"))
+        assertTrue(store.hiddenPaths().isEmpty())
+    }
+
+    @Test
+    public fun tips_seenFlagDefaultsFalseAndPersists() {
+        val store = newStore()
+        assertFalse(store.isTipsSeen())
+        store.setTipsSeen()
+        assertTrue(store.isTipsSeen())
+    }
 }

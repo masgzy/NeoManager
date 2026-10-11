@@ -163,10 +163,42 @@ public class UiStateStore(
         preferences.edit().putString(KEY_HOME, path).apply()
     }
 
+    /** 用户手动隐藏的路径集合（与系统 `.` 隐藏相互独立） */
+    public fun hiddenPaths(): Set<String> =
+        UiStateCodec
+            .decodePaths(preferences.getString(KEY_HIDDEN, null).orEmpty())
+            .toSet()
+
+    /** 追加手动隐藏；已存在时幂等返回 false */
+    public fun hidePath(path: String): Boolean {
+        val current = hiddenPaths()
+        if (path in current) return false
+        preferences.edit().putString(KEY_HIDDEN, UiStateCodec.encodePaths((current + path).toList())).apply()
+        return true
+    }
+
+    /** 解除手动隐藏；不存在时返回 false */
+    public fun unhidePath(path: String): Boolean {
+        val current = hiddenPaths()
+        if (path !in current) return false
+        preferences.edit().putString(KEY_HIDDEN, UiStateCodec.encodePaths((current - path).toList())).apply()
+        return true
+    }
+
+    /** 首次启动手势提示是否已确认 */
+    public fun isTipsSeen(): Boolean = preferences.getBoolean(KEY_TIPS_SEEN, false)
+
+    /** 标记首次启动手势提示已确认 */
+    public fun setTipsSeen() {
+        preferences.edit().putBoolean(KEY_TIPS_SEEN, true).apply()
+    }
+
     public companion object {
         private const val KEY_BOOKMARKS = "drawer_bookmarks"
         private const val KEY_HISTORY = "drawer_history"
         private const val KEY_HOME = "home_path"
+        private const val KEY_HIDDEN = "manual_hidden_paths"
+        private const val KEY_TIPS_SEEN = "gesture_tips_seen"
 
         /** 历史记录容量上限 */
         public const val HISTORY_LIMIT: Int = 50

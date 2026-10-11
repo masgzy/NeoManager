@@ -68,7 +68,12 @@ public class FilePaneState(
 
     private val sortKeyState = mutableStateOf(SortKey.NAME)
     private val sortReverseState = mutableStateOf(false)
-    private val showHiddenState = mutableStateOf(false)
+
+    /** 系统隐藏（`.` 前缀）默认展示（0.2.0-alpha07，对齐 MT 惯例） */
+    private val showHiddenState = mutableStateOf(true)
+
+    /** 用户手动隐藏列表默认不展示 */
+    private val showManualHiddenState = mutableStateOf(false)
 
     /** 排序键 */
     public var sortKey: SortKey
@@ -86,13 +91,24 @@ public class FilePaneState(
             reloadTick++
         }
 
-    /** 显示隐藏文件（`.` 前缀） */
+    /** 显示系统隐藏文件（`.` 前缀；默认开启） */
     public var showHidden: Boolean
         get() = showHiddenState.value
         set(value) {
             showHiddenState.value = value
             reloadTick++
         }
+
+    /** 显示用户手动隐藏的文件（默认关闭） */
+    public var showManualHidden: Boolean
+        get() = showManualHiddenState.value
+        set(value) {
+            showManualHiddenState.value = value
+            reloadTick++
+        }
+
+    /** 手动隐藏列表供给方（由宿主接 [UiStateStore]；每次过滤时现取） */
+    public var manualHiddenProvider: () -> Set<String> = { emptySet() }
 
     /** 刷新计数：refresh() 自增，驱动重新加载 */
     private var reloadTick: Int by mutableIntStateOf(0)
@@ -375,19 +391,23 @@ public class FilePaneState(
         val result = withContext(Dispatchers.IO) { browser.list(target) }
         result
             .onSuccess { loaded ->
-                val filtered =
-                    if (showHidden) {
-                        loaded
-                    } else {
-                        loaded.filter { !it.name.startsWith(".") }
-                    }
                 entries.clear()
-                entries.addAll(sortEntries(filtered))
+                entries.addAll(sortEntries(filterEntries(loaded)))
             }.onFailure { failure ->
                 entries.clear()
                 error = failure.message ?: failure.javaClass.simpleName
             }
         isLoading = false
+    }
+
+    /** 隐藏过滤：系统隐藏（`.` 前缀）与用户手动隐藏两层开关 */
+    private fun filterEntries(loaded: List<FileEntry>): List<FileEntry> {
+        val manual = manualHiddenProvider()
+        return loaded.filter { entry ->
+            if (!showHidden && entry.name.startsWith(".")) return@filter false
+            if (!showManualHidden && entry.path in manual) return@filter false
+            true
+        }
     }
 
     /** 目录恒优先 + 按键排序 + 逆序（观察规格第 2 节） */

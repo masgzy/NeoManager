@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +23,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +66,7 @@ import com.neomanager.ui.dualpane.actions.ActionTarget
 import com.neomanager.ui.dualpane.actions.DialogKind
 import com.neomanager.ui.dualpane.actions.FileActionsController
 import com.neomanager.ui.dualpane.actions.SortDialogState
+import com.neomanager.ui.engine.DynamicElevatedVfs
 import com.neomanager.ui.engine.LocalEngineBridge
 import com.neomanager.ui.file.EngineFileBrowser
 import com.neomanager.ui.file.FileEntry
@@ -69,15 +76,16 @@ import com.neomanager.ui.util.OpenWith
 import kotlinx.coroutines.launch
 
 /**
- * 双窗口主屏（MT 风格外壳，0.2.0-alpha05）。
+ * 双窗口主屏（0.2.0-alpha07 Material You 重塑）。
  *
- * 布局自上而下：共享炭黑顶栏（路径/统计/搜索/多选）→ 左右双窗格 → 共享白底工具栏
- * （后退/前进/添加/同步/上级）。顶底栏始终作用于「活动窗口」：点击任一窗格即激活。
+ * 布局自上而下：共享顶栏（路径/统计/搜索/多选）→ 左右双窗格（含右下角 FAB）→ 共享底栏
+ * （后退/前进/添加/同步/上级，全宽均匀分布）。顶底栏始终作用于「活动窗口」：点击任一窗格即激活。
  *
- * - 浏览后端：[VfsRegistry]（本地 + zip/apk 内部 + Root/Shizuku 提权回退）
- * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑/多选）
- * - 打开分发：目录/压缩包进入；文本→编辑器；图片→内置查看器；音视频/APK→系统应用
- * - 权限策略（全本地化承诺，不申请 INTERNET）不变：完整存储访问引导 + 旧版运行时权限
+ * - 浏览后端：[VfsRegistry]（本地 + zip/apk 内部 + Root/Shizuku 动态提权回退）；
+ * - FAB：点击或上滑弹出书签/历史快速面板（MT 惯例）；
+ * - 文件操作：长按条目 → 底部操作菜单（复制/移动/重命名/删除/压缩/解压/属性/编辑/多选）；
+ * - 打开分发：目录/压缩包进入；文本→编辑器；图片→内置查看器；音视频/APK→系统应用；
+ * - 权限策略（全本地化承诺，不申请 INTERNET）不变：完整存储访问引导 + 旧版运行时权限。
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,8 +99,11 @@ public fun DualPaneScreen(
     val engineBridge = LocalEngineBridge.current
     val scope = rememberCoroutineScope()
 
-    val elevated = remember { engineBridge.elevatedVfs() }
-    val registry = remember { VfsRegistry(elevated) }
+    // 提权后端动态解析：Shizuku 服务启动后台绑定，就绪后无需重组即对浏览生效
+    val registry =
+        remember {
+            VfsRegistry(DynamicElevatedVfs { engineBridge.elevatedVfs() })
+        }
     val browser = remember(registry) { EngineFileBrowser(registry) }
 
     val startPath =
@@ -100,7 +111,7 @@ public fun DualPaneScreen(
             @Suppress("DEPRECATION")
             Environment.getExternalStorageDirectory()?.absolutePath ?: FilePaneState.ROOT_PATH
         }
-    // 抽屉导航状态（书签/历史/首页持久化）
+    // 抽屉导航状态（书签/历史/首页/手动隐藏持久化）
     val uiStore = remember { UiStateStore.default(context) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
@@ -123,11 +134,22 @@ public fun DualPaneScreen(
     var activeIndex by remember { mutableIntStateOf(0) }
     val activeState = states[activeIndex]
 
+    // 手动隐藏列表（两层隐藏开关中的「用户隐藏」，重载时现取保证即时生效）
+    leftState.manualHiddenProvider = { uiStore.hiddenPaths() }
+    rightState.manualHiddenProvider = { uiStore.hiddenPaths() }
+
     // 文件操作控制器（剪贴板 + 对话框状态）
     val controller =
         remember(registry) {
             FileActionsController(registry = registry)
         }
+
+    // Shizuku 已授权时启动即自动绑定文件服务（下次列目录起提权后端可用）
+    LaunchedEffect(Unit) {
+        if (engineBridge.isShizukuGranted()) {
+            runCatching { engineBridge.bindShizukuService() }
+        }
+    }
 
     // 文件打开策略：目录/压缩包 → 进入；文本 → 编辑器；图片 → 查看器；音视频/APK → 系统
     fun handleOpen(entry: FileEntry) {
@@ -215,6 +237,16 @@ public fun DualPaneScreen(
     var actionTarget by remember { mutableStateOf<ActionTarget?>(null) }
     var dialog by remember { mutableStateOf<DialogKind?>(null) }
     var sortDialog by remember { mutableStateOf<SortDialogState?>(null) }
+    var quickSheet by remember { mutableStateOf(false) }
+
+    // 首次启动手势引导（确认一次后不再弹出）
+    var showTips by remember { mutableStateOf(!uiStore.isTipsSeen()) }
+    if (showTips) {
+        NeoTipsSheet(onAck = {
+            uiStore.setTipsSeen()
+            showTips = false
+        })
+    }
 
     // 多选批量操作分发：复制/剪切 → 剪贴板；删除 → 确认框（带来源面板）
     fun handleSelectionAction(
@@ -237,6 +269,29 @@ public fun DualPaneScreen(
                 dialog = DialogKind.ConfirmDelete(picked, pane)
             }
         }
+    }
+
+    // 隐藏开关作用于双窗格（应用级一致，避免两窗格口径不同）
+    fun toggleSystemHidden() {
+        val next = !activeState.showHidden
+        states.forEach { it.showHidden = next }
+    }
+
+    fun toggleManualHidden() {
+        val next = !activeState.showManualHidden
+        states.forEach { it.showManualHidden = next }
+    }
+
+    // 隐藏所选文件：写入手动隐藏列表并刷新（顶栏溢出菜单「隐藏所选文件」）
+    fun hideSelected(pane: FilePaneState) {
+        val picked = pane.selectedEntries()
+        if (picked.isEmpty()) return
+        picked.forEach { uiStore.hidePath(it.path) }
+        pane.exitSelectionMode()
+        pane.refresh()
+        Toast
+            .makeText(context, context.getString(R.string.hidden_selected_done, picked.size), Toast.LENGTH_SHORT)
+            .show()
     }
 
     NeoDrawerScaffold(
@@ -281,6 +336,9 @@ public fun DualPaneScreen(
                     leftState.setPathInstant(rightState.path)
                     rightState.setPathInstant(left)
                 },
+                onHideSelected = { hideSelected(activeState) },
+                onToggleSystemHidden = { toggleSystemHidden() },
+                onToggleManualHidden = { toggleManualHidden() },
                 onSelectionAction = { action -> handleSelectionAction(activeState, action) },
             )
             Box(Modifier.weight(1f)) {
@@ -290,6 +348,7 @@ public fun DualPaneScreen(
                             state = leftState,
                             onActivate = { activeIndex = 0 },
                             onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, leftState) },
+                            onOpenSettings = onOpenSettings,
                         )
                     },
                     second = {
@@ -297,18 +356,58 @@ public fun DualPaneScreen(
                             state = rightState,
                             onActivate = { activeIndex = 1 },
                             onEntryLongPress = { entry -> actionTarget = ActionTarget(entry, rightState) },
+                            onOpenSettings = onOpenSettings,
                         )
                     },
                 )
+                // 右下角 FAB：点击或上滑打开书签/历史快速面板（MT「底栏上滑」惯例的落地形态）
+                var fabDrag by remember { mutableFloatStateOf(0f) }
+                FloatingActionButton(
+                    onClick = { quickSheet = true },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = { fabDrag = 0f },
+                                    onVerticalDrag = { change, amount ->
+                                        change.consume()
+                                        fabDrag += amount
+                                    },
+                                    onDragEnd = { if (fabDrag < -40f) quickSheet = true },
+                                )
+                            },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Icon(
+                        Icons.Filled.Star,
+                        contentDescription = stringResource(R.string.quick_sheet_open),
+                    )
+                }
             }
             MtBottomBar(
                 state = activeState,
                 pasteEnabled = controller.clipboardCount() > 0,
-                onNewFolder = { dialog = DialogKind.NewFolder },
+                onCreate = { dialog = DialogKind.Create },
                 onPaste = { scope.launch { controller.pasteClipboard(activeState) } },
                 onSync = { otherPaneOf(activeState, states).setPathInstant(activeState.path) },
             )
         }
+    }
+
+    // 书签/历史快速面板（FAB 弹出）
+    if (quickSheet) {
+        NeoQuickSheet(
+            activeState = activeState,
+            store = uiStore,
+            onNavigate = { uri ->
+                quickSheet = false
+                activeState.openPath(uri)
+            },
+            onDismiss = { quickSheet = false },
+        )
     }
 
     // 底部操作菜单
@@ -376,15 +475,6 @@ public fun DualPaneScreen(
                         },
                         onClick = { sortState.state.sortReverse = !sortState.state.sortReverse },
                     )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(R.string.show_hidden_files) +
-                                    if (sortState.state.showHidden) " ✓" else "",
-                            )
-                        },
-                        onClick = { sortState.state.showHidden = !sortState.state.showHidden },
-                    )
                 }
             },
             confirmButton = {
@@ -395,17 +485,22 @@ public fun DualPaneScreen(
 
     // 各类输入/确认对话框
     when (val d = dialog) {
-        is DialogKind.NewFolder ->
-            TextInputDialog(
-                title = stringResource(R.string.action_new_folder),
-                initial = "",
+        is DialogKind.Create ->
+            CreateDialog(
+                onCreateFile = { name ->
+                    scope.launch {
+                        controller.createFile(activeState, name)
+                        dialog = null
+                    }
+                },
+                onCreateFolder = { name ->
+                    scope.launch {
+                        controller.createFolder(activeState, name)
+                        dialog = null
+                    }
+                },
                 onDismiss = { dialog = null },
-            ) { name ->
-                scope.launch {
-                    controller.createFolder(activeState, name)
-                    dialog = null
-                }
-            }
+            )
         is DialogKind.Rename ->
             TextInputDialog(
                 title = stringResource(R.string.action_rename),
@@ -461,6 +556,7 @@ private fun PaneHost(
     state: FilePaneState,
     onActivate: () -> Unit,
     onEntryLongPress: (FileEntry) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Box(
         modifier =
@@ -477,6 +573,7 @@ private fun PaneHost(
                 onEntryLongPress(entry)
             },
             onInteract = onActivate,
+            onOpenSettings = onOpenSettings,
         )
     }
 }
@@ -485,6 +582,46 @@ private fun otherPaneOf(
     current: FilePaneState,
     states: List<FilePaneState>,
 ): FilePaneState = states.firstOrNull { it !== current } ?: current
+
+/**
+ * MT 式「新建」对话框：文件名输入 + 取消 / 文件 / 文件夹（0.2.0-alpha07）。
+ */
+@Composable
+private fun CreateDialog(
+    onCreateFile: (String) -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    val valid = text.isNotBlank()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_new)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+        confirmButton = {
+            Row {
+                TextButton(
+                    onClick = { onCreateFile(text.trim()) },
+                    enabled = valid,
+                ) { Text(stringResource(R.string.action_new_file)) }
+                TextButton(
+                    onClick = { onCreateFolder(text.trim()) },
+                    enabled = valid,
+                ) { Text(stringResource(R.string.action_new_folder)) }
+            }
+        },
+    )
+}
 
 /** 条目操作菜单（观察规格 2026-10-10-file-manager.md 第 3 节，文案为自有实现） */
 @Composable
@@ -536,7 +673,7 @@ private fun EntryActionSheet(
     }
 }
 
-/** 通用文本输入对话框（新建/重命名/压缩命名） */
+/** 通用文本输入对话框（重命名/压缩命名） */
 @Composable
 private fun TextInputDialog(
     title: String,

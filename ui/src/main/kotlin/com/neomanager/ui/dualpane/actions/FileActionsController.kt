@@ -101,6 +101,21 @@ public class FileActionsController(
         }
     }
 
+    /** 新建空文件（0.2.0-alpha07，MT「新建」对话框的「文件」按钮） */
+    public suspend fun createFile(
+        pane: FilePaneState,
+        name: String,
+    ) {
+        val target = VfsUri.parseOrNull(pane.path)?.resolve(name) ?: return
+        runAndReport("新建") {
+            val backend = registry.resolve(target)
+            check(!backend.exists(target)) { "同名条目已存在：$name" }
+            backend.writeFile(target, java.io.ByteArrayInputStream(ByteArray(0)), append = false).getOrThrow()
+            pane.refresh()
+            "已创建文件 $name"
+        }
+    }
+
     /** 重命名 */
     public suspend fun rename(
         entry: FileEntry,
